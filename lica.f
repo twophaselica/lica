@@ -1,25 +1,25 @@
-c-----compile(MACHINE)
-cf90 lica.f geom.f lica_sgs.f pcg.f two_phase.f -g -traceback -fpe0 -openmp -o 1
+!-----compile(MACHINE)
+!cf90 lica.f geom.f lica_sgs.f pcg.f two_phase.f -g -traceback -fpe0 -openmp -o 1
 
 
-cf90 modules.f lica.f geom.f lica_sgs.f pcg.f two_phase.f -g -traceback -fpe0 -openmp -o 1
+!cf90 modules.f lica.f geom.f lica_sgs.f pcg.f two_phase.f -g -traceback -fpe0 -openmp -o 1
 
 
-c-----file_transfer
-C supercomputer -> machine
-c  scp -r x1185kky@gaiad.ksc.re.kr:/gpfs2/x1185kky/141118_ret=1024/ /home/kykim/0bubbly_flow
-c  scp x1185kky@gaiad.ksc.re.kr:/gpfs2/x1185kky/141103_caf_0.3/fld072000 /home/kykim/0bubbly_flow/0.3
+!-----file_transfer
+! supercomputer -> machine
+!  scp -r x1185kky@gaiad.ksc.re.kr:/gpfs2/x1185kky/141118_ret=1024/ /home/kykim/0bubbly_flow
+!  scp x1185kky@gaiad.ksc.re.kr:/gpfs2/x1185kky/141103_caf_0.3/fld072000 /home/kykim/0bubbly_flow/0.3
 
-c macine -> supercomputer
-c  scp -r /home/kykim/0bubbly_flow x1185kky@gaiad.ksc.re.kr:/gpfs2/x1185kky/
-c  scp /home/kykim/0bubbly_flow/fld129000 x1185kky@gaiad.ksc.re.kr:/gpfs2/x1185kky
+! macine -> supercomputer
+!  scp -r /home/kykim/0bubbly_flow x1185kky@gaiad.ksc.re.kr:/gpfs2/x1185kky/
+!  scp /home/kykim/0bubbly_flow/fld129000 x1185kky@gaiad.ksc.re.kr:/gpfs2/x1185kky
 
-c machine -> machine
-c  scp -r -P 41118 /home/kykim/150518_les_eddy/ kykim@karman18.snu.ac.kr:/home/kykim/0bubbly_flow
-c  scp -P 41118 /home/kykim/141103_caf_0.3/fld283000 kykim@karman18.snu.ac.kr:/home/kykim/0bubbly_flow
+! machine -> machine
+!  scp -r -P 41118 /home/kykim/150518_les_eddy/ kykim@karman18.snu.ac.kr:/home/kykim/0bubbly_flow
+!  scp -P 41118 /home/kykim/141103_caf_0.3/fld283000 kykim@karman18.snu.ac.kr:/home/kykim/0bubbly_flow
 
-C supercomputer -> supercomputer
-c scp -r x1185kky@gaiad.ksc.re.kr:/gpfs2/x1185kky/141103_caf_0.3 /gpfs2/x1185kky/141012_caf_0.3
+! supercomputer -> supercomputer
+! scp -r x1185kky@gaiad.ksc.re.kr:/gpfs2/x1185kky/141103_caf_0.3 /gpfs2/x1185kky/141012_caf_0.3
 
 
 !***********************************************************************
@@ -49,443 +49,140 @@ c scp -r x1185kky@gaiad.ksc.re.kr:/gpfs2/x1185kky/141103_caf_0.3 /gpfs2/x1185kky
 !***********************************************************************
 
       PROGRAM MAIN
+      
+      USE PARAM_VAR     
       USE FLOW_VAR
-      USE MG_OPTION
-      USE TWO_PHASE_PROPERTY
-
-      USE PARAM_VAR
       USE FLOW_GEOM_VAR
-
+      USE FLD_AVG      
+      USE MG_OPTION
+      USE HEAT_VAR
+   
+      
+      USE TWO_PHASE_PROPERTY
       USE LVS_VAR
       USE LVS_GEOM_VAR
       USE LVS_COUPLING
-
-      USE FLD_AVG
-
-      USE IBM_VAR
-
-      USE HEAT_VAR
       
       USE TIME_VAR
+      USE IBM_VAR      
+      ! USE LES_VAR
+      ! 2018-01-19_implicit none_LICA PART
+       IMPLICIT NONE
       
-      USE LES_VAR
-
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL P(0:M1,0:M2,0:M3)
-
-      REAL PSI_XN(0:M1,0:M2,0:M3)
-      REAL PSI_YN(0:M1,0:M2,0:M3)
-      REAL PSI_ZN(0:M1,0:M2,0:M3)
-      REAL PSI_CN(0:M1,0:M2,0:M3)
-
-      REAL VOL_TOT_ORI(MLVS)
-
-      REAL QVOL_ORI
-      REAL VOL1 !TOTAL FLUID VOLUME
-
-      !FOR INITIAL MEANPGR
-      REAL, DIMENSION (:,:,:), ALLOCATABLE :: DENF_Z
-
-      !RK3_OLD
-      REAL, ALLOCATABLE :: RK3XO(:,:,:),RK3YO(:,:,:),RK3ZO(:,:,:) 
-      
-      !RK3_OLD_ENERGY
-      REAL, ALLOCATABLE :: ANPSO(:,:,:) 
-
-      !TRACE
-      INTEGER NTEST,NTPRINT,NTEST2
-      INTEGER ITR(10000),JTR(10000),KTR(10000)
-      INTEGER ITR2(10000),JTR2(10000),KTR2(10000)
-
-      CHARACTER*30 gridfile,fileprevel
       CHARACTER*10 DUMMY
+      CHARACTER*30 gridfile
+      CHARACTER*30 fileprevel
+
+      INTEGER*8    I,J,K,L,N,NN,LLVS,IP1,JP1                                                     
+      INTEGER*8    ICFL_CHANGE
+      INTEGER*8    IHIST,ITER_NS   
       
-      INTEGER IREAD
-
-      call timestamp
-
-      CALL real_time(TOTAL_TIME_B)
-
-C=====read input file
-      OPEN(10,FILE='lica.in')
-      READ(10,*) DUMMY
-      READ(10,*) IRESET,IREAD,IAVG,IPZERO,IDTOLD
-      READ(10,*) DUMMY
-      READ(10,*) NTST,NPRINT,NPRIAVG,NPIN
-      READ(10,*) DUMMY
-      READ(10,*) IMPL,IDTOPT,DT,CFLMAX
-      READ(10,*) DUMMY
-      READ(10,*) RESID_POI,NLEV,IWC,NBLI,MGITR,IOLDV,IMGSOR,WWSOR
-      READ(10,*) DUMMY
-      READ(10,*) IPS
-      READ(10,*) DUMMY
-      READ(10,*) ILES,ISGSMOD,DYNMON,CSGS,CSGSPS,IFILTER
-      READ(10,*) DUMMY
-      READ(10,*) IBMON,MASSON
-      READ(10,*) DUMMY
-      READ(10,*) IPOISS
-      READ(10,*) DUMMY
-      READ(10,*) ICH,IPX,IPY,IPZ
-      READ(10,*) DUMMY
-      READ(10,*) DUMMY
-      READ(10,*) ITRACKING,MCLS,MGLOBAL
-      READ(10,*) DUMMY
-      READ(10,*) RE_AIR,VISR,DENR
-      READ(10,*) DUMMY
-      READ(10,*) SURF_J,FR,FK
-      READ(10,*) DUMMY
-      READ(10,*) PRM,SCR,TCR
-      READ(10,*) DUMMY
-      READ(10,*) DUMMY
-      READ(10,'(a)') gridfile
-      READ(10,'(a)') fileprevel
-      READ(10,*) DUMMY
-      READ(10,*) NTEST,NTPRINT
-
-      WRITE(*,101) IRESET,IREAD,IAVG,IDTOLD
-      WRITE(*,103) NTST,NPRINT,NPRIAVG,NPIN
-      WRITE(*,105) IMPL,IDTOPT,DT,CFLMAX
-      WRITE(*,109) RESID_POI,NLEV,IWC,NBLI,MGITR,IOLDV,IMGSOR,WWSOR
-      WRITE(*,110) IPS
-      WRITE(*,111) ILES,ISGSMOD,DYNMON,CSGS,CSGSPS,IFILTER
-      WRITE(*,113) IBMON,MASSON
-      WRITE(*,115) IPOISS
-      WRITE(*,117) ICH,IPX,IPY,IPZ
-      WRITE(*,119) ITRACKING,MCLS,MGLOBAL
-      WRITE(*,121) RE_AIR,VISR,DENR
-      WRITE(*,123) SURF_J,FR,FK
-      WRITE(*,125) gridfile
-      IF (IREAD .EQ. 1) WRITE(*,127) fileprevel
-     
- 101  FORMAT('IRESET=',I8,'  IREAD=',I9,'  IAVG=',I10,
-     &       '  IPZERO=',I8,'  IDTOLD=',F7.2)
- 103  FORMAT('NTST=',I10,'  NPRINT=',I8,'  NPRIAVG=',I7,'  NPIN=',I10)
- 105  FORMAT('IMPL=',I10,'  IDTOPT=',I8,'  DT=',ES12.4,
-     &       '  CFLMAX=',F8.2)
- 107  FORMAT('IUD=',I11,'  IEND=',I10,'  IENDM=',I9,'  ALPZ=',F10.4)
- 109  FORMAT('RESID=',ES9.2,'  NLEV=',I10,'  IWC=',I11,'  NBLI=',I10
-     &      ,'  MGITR=',I9,'  IOLDV=',I9,'  IMGSOR=',I8,'  WWSOR=',F9.3)
- 110  FORMAT('IPS=',I11)
- 111  FORMAT('ILES=',I10,'  ISGSMOD=',I7,'  DYNMON=',L8,
-     &       '  CSGS=',F10.4,'  CSGSPS=',F8.4,'  IFILTER=',I7)
- 113  FORMAT('IBMON=',I9,'  MASSON=',I8)
- 115  FORMAT('IPOISS=',I9)
- 117  FORMAT('ICH=',I9,'  IPX=',I8,'  IPY=',I8,'  IPZ=',I8)
- 119  FORMAT('ITRACKING=',I9,'  MCLS=',I8,'  MGLOBAL=',I8)
- 121  FORMAT('RE_AIR=',F12.5,'  VISR=',F12.5,'  DENR=',F12.5)
- 123  FORMAT('SUR_J=',F12.5,'  FR=',F12.5,'  FK=',F12.5)
- 125  FORMAT('GRID=   ',A30)
- 127  FORMAT('FIELD_READ=   ',A30) 
-
- 100  FORMAT('INITIAL FIELD TREATMNT:                READING DONE')
-
- 300  FORMAT(I15,'   LOCAL RESIDUE FOR MASS FLOW CONSV.:',ES18.5,
-     &     ' AT ',ES11.4)
- 310  FORMAT(I15,'   CFL# EXCEED GIVEN CFL LIMIT :',ES18.5,
-     &     ' AT TIME',F12.5)
- 320  FORMAT('--------------------------',I6,'  TIME=',F10.5,
-     &       '  DT=',F12.8)
-
+      INTEGER*8    ITIME_VARING_PROPERTIES,NV,NAV,L1,L2    
+      REAL*8       TIME_OLD,TIME_INTERVAL,T_TAR      
+      REAL*8       FUNCBODY,PI
+      REAL*8       DENP_OLD,DENM_OLD,VISP_OLD,VISM_OLD,SURF_OLD,FR_OLD
+      REAL*8       DENP_NEW,DENM_NEW,VISP_NEW,VISM_NEW,SURF_NEW,FR_NEW
+      REAL*8       CFLM
+      REAL*8       DVMAX,QMMAX
+      REAL*8       FTRTIME1,FTRTIME2,FTRTIME3,FTRTIME4,FTRTIME5
+      REAL*8       PHI_MAX,PHI_MIN,PHI_MAX_TMP,PHI_MIN_TMP,T_PERIOD             
+      INTEGER*8    IERR,NNVS,NTII
       
-C------------------MEMORY ALLOCATAION & INITIALIZATION-----------------C
+      !FOR INITIAL MEANPGR
+      REAL*8, DIMENSION (:,:,:), ALLOCATABLE :: DENF_Z
+      !RK3_OLD
+      REAL*8, DIMENSION (:,:,:), ALLOCATABLE :: RK3XO,RK3YO,RK3ZO       
+      !RK3_OLD_ENERGY
+      REAL*8, DIMENSION (:,:,:), ALLOCATABLE :: ANPSO 
+      !TRACE
+      INTEGER*8 ITR(10000),JTR(10000),KTR(10000)
+      INTEGER*8 ITR2(10000),JTR2(10000),KTR2(10000)      
+!-----MAIN VARIABLES---------------            
+      REAL*8 U(0:M1,0:M2,0:M3)
+      REAL*8 V(0:M1,0:M2,0:M3)
+      REAL*8 W(0:M1,0:M2,0:M3)
+      REAL*8 P(0:M1,0:M2,0:M3)
+      REAL*8 PSI_XN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_YN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_ZN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_CN(0:M1,0:M2,0:M3)
+      REAL*8 VOL_TOT_ORI(MLVS)
+      REAL*8 QVOL_ORI,VOL1 !TOTAL FLUID VOLUME 
+      
+      PI=ACOS(-1D0)
+      
+       CALL TIMESTAMP
+       CALL REAL_TIME(TOTAL_TIME_B)
+       CALL INPUT_SIMULATION(gridfile,fileprevel)
+       
+!%%%%%%%%%%%%%%%%  MEMORY ALLOCATAION & INITIALIZATION  %%%%%%%%%%%%%%%C      
+!-----MAIN VARIABLES---------------------------------------------------C       
 !$OMP PARALLEL DO private(I,J)
        DO K=0,N3
        DO J=0,N2
        DO I=0,N1
-        U(I,J,K)=0.
-        V(I,J,K)=0.
-        W(I,J,K)=0.
-        PSI_XN(I,J,K)=0.
-        PSI_YN(I,J,K)=0.
-        PSI_ZN(I,J,K)=0.
-        PSI_CN(I,J,K)=0.
+        U(I,J,K)=0D0
+        V(I,J,K)=0D0
+        W(I,J,K)=0D0
+        PSI_XN(I,J,K)=0D0
+        PSI_YN(I,J,K)=0D0
+        PSI_ZN(I,J,K)=0D0
+        PSI_CN(I,J,K)=0D0
        ENDDO
        ENDDO
        ENDDO
-
 !$OMP PARALLEL DO
        DO LLVS=1,MLVS
        VOL_TOT_ORI(LLVS)=0.
-       ENDDO
-
+       ENDDO      
 !$OMP PARALLEL DO
        DO L=1,10000
-        ITR(L)=0 ;JTR(L)=0 ;KTR(L)=0 ;ITR2(L)=0 ;JTR2(L)=0 ;KTR2(L)=0
+       ITR(L)=0 ;JTR(L)=0 ;KTR(L)=0 ;ITR2(L)=0 ;JTR2(L)=0 ;KTR2(L)=0
        ENDDO
-
-C-----MODULE
-      !FLOW_VAR
-      ALLOCATE(UO(0:M1,0:M2,0:M3),VO(0:M1,0:M2,0:M3),WO(0:M1,0:M2,0:M3))
-      ALLOCATE(AIU(M1),CIU(M1),AIVW(M1),CIVW(M1)
-     &        ,AJV(M2),CJV(M2),AJUW(M2),CJUW(M2)
-     &        ,AKW(M3),CKW(M3),AKUV(M3),CKUV(M3))
-
-!$OMP PARALLEL DO private(I,J)
-       DO K=0,N3
-       DO J=0,N2
-       DO I=0,N1
-        UO(I,J,K)=0. ;VO(I,J,K)=0.; WO(I,J,K)=0.
-       ENDDO ;ENDDO ;ENDDO
-
-!$OMP PARALLEL DO
-       DO I=1,N1
-        AIU(I)=0. ;CIU(I)=0. ;AIVW(I)=0. ;CIVW(I)=0.
-       ENDDO
-!$OMP PARALLEL DO
-       DO J=1,N2
-        AJV(J)=0. ;CJV(J)=0. ;AJUW(J)=0. ;CJUW(J)=0.
-       ENDDO
-!$OMP PARALLEL DO
-       DO K=1,N3
-        AKW(K)=0. ;CKW(K)=0. ;AKUV(K)=0. ;CKUV(K)=0.
-       ENDDO
+!-----MODULES----------------------------------------------------------C       
+       CALL ALLOCINIT
+!-----GEOMETRY---------------------------------------------------------C
+       CALL GEOM(gridfile)
+!-----SIDE BOUNDARY CONDITION (TWO-PHASE NOT CONSIDERED)---------------C
+       !IF ((IPX .EQ. 3) .OR. (IPY .EQ. 3) .OR. (IPZ .EQ. 3))CALL SIDE_BC
+       ! MIXED BOUNDARY CONDITION을 줘야하는 경우 SIDE_BC에서 직접 주기 not complete
        
-      !LVS_VAR
-      ALLOCATE( ALPHI(MF_BAND,M_MAX,MLVS))
-      ALLOCATE( NUMA(M_MAX,MLVS))
-      ALLOCATE( I_B(MF_BAND,M_MAX,MLVS),J_B(MF_BAND,M_MAX,MLVS)
-     &                           ,K_B(MF_BAND,M_MAX,MLVS))
-      ALLOCATE( PSIF(M1L:M1U,M2L:M2U,M3L:M3U))
-
-      ALLOCATE(MASK_BUB(M1M,M2M,M3M))
-      ALLOCATE(MASK_GLOBAL(0:M1F,0:M2F,0:M3F))
-
-       DO LLVS=1,MLVS
-       DO N=1,M_MAX
-        NUMA(N,LLVS)=0
-!$OMP PARALLEL DO
-       DO NN=1,MF_BAND
-        ALPHI(NN,N,LLVS)=0.
-        I_B(NN,N,LLVS)=0 ;J_B(NN,N,LLVS)=0 ;K_B(NN,N,LLVS)=0
-       ENDDO
-       ENDDO
-       ENDDO
-
-!$OMP PARALLEL DO private(I,J)
-       DO K=M3L,M3U
-       DO J=M2L,M2U
-       DO I=M1L,M1U
-        PSIF(I,J,K)=0.
-       ENDDO
-       ENDDO
-       ENDDO
-
-!$OMP PARALLEL DO private(I,J)
-       DO K=1,N3M
-       DO J=1,N2M
-       DO I=1,N1M
-        MASK_BUB(I,J,K)=0
-       ENDDO
-       ENDDO
-       ENDDO
-
-!$OMP PARALLEL DO private(I,J)
-       DO K=0,N3F
-       DO J=0,N2F
-       DO I=0,N1F
-        MASK_GLOBAL(I,J,K)=0
-       ENDDO
-       ENDDO
-       ENDDO
-       
-      !IBM_VAR
-      ALLOCATE(QMASS(0:M1,0:M2,0:M3))
-
-!$OMP PARALLEL DO private(I,J)
-       DO K=1,N3M
-       DO J=1,N2M
-       DO I=1,N1M
-        QMASS(I,J,K)=0.
-       ENDDO
-       ENDDO
-       ENDDO
-
-      !HEAT_VAR
-      IF (IPS .EQ. 1) THEN
-      ALLOCATE(T(0:M1,0:M2,0:M3))
-      ALLOCATE(TALPH(0:M1,0:M2,0:M3))
-      ALLOCATE(RHSPS(M1M,M2M,M3M))
-
-!$OMP PARALLEL DO private(I,J)
-       DO K=0,N3 ;DO J=0,N2 ;DO I=0,N1
-        T(I,J,K)=0.
-        TALPH(I,J,K)=0.
-       ENDDO ;ENDDO ;ENDDO
-
-!$OMP PARALLEL DO private(I,J)
-       DO K=1,N3M ;DO J=1,N2M ;DO I=1,N1M
-        RHSPS(I,J,K)=0.
-       ENDDO ;ENDDO ;ENDDO
-      ENDIF
-      
-      !TIME_VAR
-      ALLOCATE(SGSTIME_B(3),SGSTIME_E(3)
-     &   ,ANSETIME_B(100),ANSETIME_E(100),POISSTIME_B(3),POISSTIME_E(3)
-     &   ,CONTINUITY_B(3),CONTINUITY_E(3),ALVS_B(3),ALVS_E(3))
-     
-       DO L=1,3
-        SGSTIME_B(L)=0. ;SGSTIME_E(L)=0.
-        POISSTIME_B(L)=0. ;POISSTIME_E(L)=0.
-        CONTINUITY_B(L)=0. ;CONTINUITY_E(L)=0.
-        ALVS_B(L)=0. ;ALVS_E(L)=0.
-       ENDDO
-      
-       DO L=1,100
-        ANSETIME_B(L)=0. ;ANSETIME_E(L)=0
-       ENDDO
-     
-      !LES_VAR
-      IF (ILES .EQ. 1) THEN
-      ALLOCATE(CFX1 (M1M,-1:1),CFX2 (M1M,-2:2),
-     &                 CFZP1(M3M,-1:1),CFZP2(M3M,-2:2))
-      ALLOCATE(TNU(0:M1,0:M2,0:M3))
-!      ALLOCATE(TNUX(0:M1,0:M2,0:M3)
-!     &,TNUY(0:M1,0:M2,0:M3),TNUZ(0:M1,0:M2,0:M3))
-
-      DO L=-1,1
-!$OMP PARALLEL DO
-      DO I=1,N1M
-      CFX1 (I,L)=0.
-      CFX2 (I,L)=0.
-      ENDDO
-
-!$OMP PARALLEL DO
-      DO K=1,N3M
-      CFZP1(K,L)=0.
-      CFZP2(K,L)=0.
-      ENDDO
-      ENDDO
-
-!$OMP PARALLEL DO private(I,J)
-       DO K=0,N3 ;DO J=0,N2 ;DO I=0,N1
-      TNU(I,J,K)=0.
-!     TNUX(I,J,K)=0. ;TNUY(I,J,K)=0. ;TNUZ(I,J,K)=0.
-      ENDDO ;ENDDO ;ENDDO
-      ENDIF
-
-C------------------MEMORY ALLOCATAION & INITIALIZATION-----------------C
-
-       IF (ICH .EQ. 0 ) THEN
-         WRITE(*,*) 'NO-MEAN_PRESSURE GRADIENT'
-       ELSE IF (ICH .EQ. 1 ) THEN
-         WRITE(*,*) 'MASS-FLOW RATE CONST'
-       ELSE IF (ICH .EQ. 2 ) THEN
-         WRITE(*,*) 'PRESSURE GRADIENT CONST'
-       ENDIF
-
-      CALL GEOM(gridfile)
-
-!!!!!!INITIALIZATION
-      SGSTIME_B=0.
-      SGSTIME_E=0.
-      ANSETIME_B=0.
-      ANSETIME_E=0.
-      POISSTIME_B=0.
-      POISSTIME_E=0.
-      CONTINUITY_B=0.
-      CONTINUITY_E=0.
-      ALVS_B=0.
-      ALVS_E=0.
-!!!!!!INITIALIZATION
-
-      vol1=0.
+      VOL1=0D0
 !$OMP PARALLEL DO private(I,J)
 !$OMP&reduction(+:VOL1)
       DO K=1,N3M
       DO J=1,N2M
       DO I=1,N1M
-       IF ( FUNCBODY(XP(I),YP(J),Z(K)) .GE. 0. )
-     &                          vol1=vol1+SDX(I)*SDY(J)*VDZ(K)
+      VOL1=VOL1+SDX(I)*SDY(J)*VDZ(K)
       ENDDO
       ENDDO
       ENDDO
-
-      PI=ACOS(-1.)
-C============================FOR TWO-PHASE=============================C
-      RE=RE_AIR
-      REI=1./RE
-
-      DENM=1.        !NON-DIMENSIONALIZED VIS
-      DENP=DENR
-      DEN_DIFF=DENP-DENM
-
-      VISM=1.*REI    !NON-DIMENSIONALIZED VIS
-      VISP=VISR*REI
-      VIS_DIFF=VISP-VISM
-
-      REM=RE_AIR
-      REP=REM*DENR/VISR
       
-      DENSCM=DENM*1.   !SPECIFIC HEAT CAPACITY
-      DENSCP=DENSCM*(DENR*SCR)
-      DENSC_DIFF=DENSCP-DENSCM
+      IF (NTEST .NE. 0) THEN
+      CALL TRACEINIT(ITR,JTR,KTR,ITR2,JTR2,KTR2)
+      ELSE
+      NTEST2=0
+      ENDIF
       
-      TCM=1.   !THERMAL CONDUCTIVITY
-      TCP=TCR
-      TC_DIFF=TCP-TCM
-      
-      PRM=PRM !PRANDTL NUMBER
-      PRP=PRM*VISR*SCR/TCR
-      
-      PRA=PRM
-      PRAI=1./PRM
-      IF ( SURF_J .EQ. 0. ) THEN
-       SURF=0.
-      ELSE
-       SURF=1./SURF_J  !SURF_J IS WEBER NUMBER
+      IF (IBMON.NE. 0) THEN
+                       CALL IBMINIT
+      IF (IPS  .EQ. 1) CALL IBMINIT_PS
+      ! IF (ILES .EQ. 1) CALL NUTZEROREAD
       ENDIF
 
-      IF (ICH .EQ. 2) THEN
-       PMI_CONST=-FK
-      ELSE
-        PMI_CONST=0.
-      ENDIF
-
-      IF(FR .EQ. 0.) THEN
-        GRAVITY=0.
-      ELSE
-        GRAVITY=1./FR**2
-      ENDIF
-
-      TIME_ST=SURF*PI/(DENM+DENP)
-      TIME_GV=DEN_DIFF/(DENM+DENP)*GRAVITY/PI
-
-      PRINT*,'MEAN PRESSURE GRADIENT :',FK
-      PRINT*,'SURF_J :',SURF_J
-      PRINT*,'FR :',FR
-      PRINT*,'DENSITY_RATIO :',DENR
-      PRINT*,'VISCOSITY_RATIO :',VISR
-      PRINT*,'RE_AIR :',REM,'RE_WATER :',REP
-      PRINT*,'PR_AIR :',PRM,'PR_WATER :',PRP
-C============================FOR TWO-PHASE=============================C
-      IF (NTEST     .NE. 0) THEN
-      	CALL TRACEINIT(NTEST,NTPRINT,NTEST2,ITR,JTR,KTR,ITR2,JTR2,KTR2)
-      ELSE
-        NTEST2=0
-      ENDIF
-      IF (IBMON.NE.0) THEN
-      CALL IBMINIT
-      IF (IPS .EQ. 1) CALL IBMINIT_PS
-      IF (ILES .EQ. 1) CALL NUTZEROREAD
-      ENDIF
-
-      IF (ILES .EQ. 1) CALL SGSFILTERINIT
-
-C=====read or make initial field
+!=====read or make initial field
       IF (IREAD.NE.0) THEN
-        OPEN(12,FILE=fileprevel)
-        CALL PREFLD(IHIST,fileprevel,IDTOLD,U,V,W,P,IPZERO,VOL_TOT_ORI
-     &,QVOL_ORI)
-
-        CLOSE(12)
+       OPEN(12,FILE=fileprevel)
+       CALL PREFLD(IHIST,fileprevel,U,V,W,P,VOL_TOT_ORI,QVOL_ORI)
+       CLOSE(12)
       ELSE
-
        CALL MAKEFLD(IHIST,NTII,U,V,W,P)
       ENDIF
-
+      
       IF (ITRACKING .EQ. 0) THEN
-
-      DO LLVS=1,NLVS
+      
+      WRITE(*,*) 'LVS IS NOT SOLVED, ALL LVS FUNCTION = ZERO'
+      DO LLVS=1,MLVS
        DO N=1,N_MAX
 !$OMP PARALLEL DO private(I,J,K)
         DO NN=1,MF_BAND
@@ -497,18 +194,6 @@ C=====read or make initial field
        ENDDO
       ENDDO
 
-!$OMP PARALLEL DO private(I,J)
-       DO K=0,N3
-       DO J=0,N2
-       DO I=0,N1
-         PSI_XN(I,J,K)=0.
-         PSI_YN(I,J,K)=0.
-         PSI_ZN(I,J,K)=0.
-         PSI_CN(I,J,K)=0.
-       ENDDO
-       ENDDO
-       ENDDO
-        WRITE(*,*) 'LVS IS NOT SOLVED, ALL LVS FUNCGION IS ZERO'
       ALLOCATE(SUR_X(M1M,M2M,M3M),SUR_Y(M1M,M2M,M3M),SUR_Z(M1M,M2M,M3M))
 !$OMP PARALLEL DO private(I,J)
       DO K=1,N3M
@@ -520,57 +205,53 @@ C=====read or make initial field
       ENDDO
       ENDDO
       ENDDO
-      
+   
+!-----IF THERE IS A SECOND PHASE_ITRACKING=/=0'     
        ELSE
-
-      NLVS=MLVS
+      !NLVS=15 !MLVS
       N_MAX=M_MAX
-
-      !TIME_VARING_PROPERTIES
-
-      !INPUT
+                  
+!-----TIME_VARING_PROPERTIES INPUT-------------------------------------C
       ITIME_VARING_PROPERTIES=0
-
       TIME_INTERVAL=0.5
       DENP_OLD=831.667
       VISP_OLD=55.56/1466.
       VISM_OLD=1./1466.
       SURF_OLD=1./0.41485
-      !INPUT
-
+      !INPUT           
       IF (ITIME_VARING_PROPERTIES .EQ. 1) THEN
-
       TIME_OLD=TIME
       T_TAR=TIME+TIME_INTERVAL
-
+                 
       DENP_NEW=DENP
       VISP_NEW=VISP
       VISM_NEW=VISM
       SURF_NEW=SURF
-      
+                         
       DENP=DENP_OLD
       DEN_DIFF=DENP_OLD-DENM
       VISP=VISP_OLD
       VISM=VISM_OLD
       VIS_DIFF=VISP_OLD-VISM_OLD
       SURF=SURF_OLD
-      ENDIF !IF (ITIME_VARING_PROPERTIES .EQ. 1) THEN
+      ENDIF !IF (ITIME_VARING_PROPERTIES .EQ. 1) THEN------------------C
 
-        CALL LVSINIT(ITRACKING,U,V,W,PSI_CN,VOL_TOT_ORI)
+        CALL LVSINIT(U,V,W,PSI_CN,VOL_TOT_ORI)
         CALL GRID_COUPLING(1,PSI_XN,PSI_YN,PSI_ZN,PSI_CN)
+      ENDIF
+       
+       IF ( ICH .EQ. 0 ) THEN
+         PMI=0D0
+       ELSE
+         IF (IRESET .EQ. 1 ) THEN
+         OPEN(96,FILE='0MEANP.dat')
+         ELSE
+         OPEN(96,FILE='0MEANP.dat',POSITION='APPEND')
+         ENDIF
        ENDIF
 
-        IF ( ICH .EQ. 0 ) THEN
-          PMI=0.
-        ELSE
-          IF (IRESET .EQ. 1 ) THEN
-            OPEN(96,FILE='0MEANP.dat')
-          ELSE
-            OPEN(96,FILE='0MEANP.dat',POSITION='APPEND')
-          ENDIF
-        ENDIF
-
        ALLOCATE (DENF_Z(0:M1,0:M2,0:M3))
+!$OMP PARALLEL DO private(I,J)       
        DO K=1,N3M
        DO J=1,N2M
        DO I=1,N1M
@@ -579,54 +260,50 @@ C=====read or make initial field
        ENDDO
        ENDDO
 
-       IF(ICH .NE. 0 ) CALL MEANPGR(W,PSI_ZN,PSI_CN,DENF_Z,VOL1) !after LVSINIT FOR AVERAGED DENSITY
-
-       IF(ICH.EQ.1) THEN
-        IF (IRESET .EQ. 1) THEN !ELSE READ AT THE FIELD
+       IF(ICH .NE. 0) CALL MEANPGR(W,PSI_ZN,PSI_CN,DENF_Z,VOL1) !after LVSINIT FOR AVERAGED DENSITY
+       IF(ICH .EQ. 1) THEN
+       IF (IRESET .EQ. 1) THEN !ELSE READ AT THE FIELD
          CALL QVOLCALC(QVOL_ORI,1,W,PSI_ZN,DENF_Z,VOL1)
          WRITE(*,*) 'TOTAL MASS FLOW RATE IS CONSTANT'
          WRITE(*,*) 'INITIAL MASS FLOW RATE = ',QVOL_ORI
-        ENDIF
+       ENDIF
        ENDIF
        DEALLOCATE (DENF_Z)
 
-C=====initialize others
+!=====INITIALIZE OTHERS
       IF (IRESET .EQ. 1) THEN
          IHIST=0
-         TIME=0.
+         TIME=0D0
       END IF
       NTIME=0
-
+      
+      ! IF(ILES .EQ. 1) CALL SGSINIT
+      ! IF(IPOISS .EQ. 0) CALL POISINIT
       CALL RK3COEF
-      IF(ILES .EQ. 1) CALL SGSINIT
-!      IF(IPOISS .EQ. 0) CALL POISINIT
       CALL LHSINIT
       IF (IAVG .EQ. 1) CALL FIELD_AVG_INIT_RT(IHIST)
       IF (IAVG .EQ. 2) CALL FIELD_AVG_INIT_XYZ(IHIST)
 
-      CFLM=CFLMAX
-
-      NV=101                  ! INITIAL FILE NUMBER(BINARY)
+      NV =101                  ! INITIAL FILE NUMBER(BINARY)
       NAV=2001
-      L1=3001
-      L2=5001
+      L1 =3001
+      L2 =5001
 
       IF (IREAD.EQ.0) THEN
-
       OPEN(13,FILE='0ftrhist.dat')
-      IF (ILES  .EQ. 1) OPEN(89,FILE='0ftrles.dat')
-      IF (ILES  .EQ. 1) OPEN(95,FILE='0ftrles2.dat')
+      ! IF (ILES  .EQ. 1) OPEN(89,FILE='0ftrles.dat')
+      ! IF (ILES  .EQ. 1) OPEN(95,FILE='0ftrles2.dat')
       IF (NTEST .NE. 0) OPEN(91,FILE='0ftru.dat')
       IF (NTEST .NE. 0) OPEN(92,FILE='0ftrv.dat')
       IF (NTEST .NE. 0) OPEN(93,FILE='0ftrw.dat')
       IF (NTEST .NE. 0) OPEN(94,FILE='0ftrp.dat')
       IF (IPS   .EQ. 1) OPEN(97,FILE='0ftrps.dat')
       OPEN(87,FILE='0ftrtime.dat')
-
+      
       ELSE IF (IREAD.EQ.1) THEN
       OPEN(13,FILE='0ftrhist.dat',POSITION='APPEND')
-      IF (ILES  .EQ. 1) OPEN(89,FILE='0ftrles.dat',POSITION='APPEND')
-      IF (ILES  .EQ. 1) OPEN(95,FILE='0ftrles2.dat',POSITION='APPEND')
+      ! IF (ILES  .EQ. 1) OPEN(89,FILE='0ftrles.dat',POSITION='APPEND')
+      ! IF (ILES  .EQ. 1) OPEN(95,FILE='0ftrles2.dat',POSITION='APPEND')
       IF (NTEST .NE. 0) OPEN(91,FILE='0ftru.dat',POSITION='APPEND')
       IF (NTEST .NE. 0) OPEN(92,FILE='0ftrv.dat',POSITION='APPEND')
       IF (NTEST .NE. 0) OPEN(93,FILE='0ftrw.dat',POSITION='APPEND')
@@ -637,13 +314,17 @@ C=====initialize others
       IF (NTEST2.NE. 0) OPEN(82,FILE='0ftrv.dat',POSITION='APPEND')
       IF (NTEST2.NE. 0) OPEN(83,FILE='0ftrw.dat',POSITION='APPEND')
       IF (NTEST2.NE. 0) OPEN(84,FILE='0ftrp.dat',POSITION='APPEND')
-
       ENDIF
 
-C=====start time dependent calculation
-      DO 3000 M=1,NTST              ! TOTAL ITERATION
 
+!======================================================================!
+!======================================================================!
+!=====start time dependent calculation=================================!
+      CFLM=CFLMAX
+      DO 3000 M=1,NTST              ! TOTAL ITERATION
       CALL real_time(TIME_BEGIN)
+
+      NTIME=NTIME+1
 
       IF (ITIME_VARING_PROPERTIES .EQ. 1) THEN
       IF (TIME .LE. T_TAR) THEN
@@ -652,119 +333,23 @@ C=====start time dependent calculation
       VISM=VISM_OLD+(VISM_NEW-VISM_OLD)/(T_TAR-TIME_OLD)*(TIME-TIME_OLD)
       SURF=SURF_OLD+(SURF_NEW-SURF_OLD)/(T_TAR-TIME_OLD)*(TIME-TIME_OLD)
       ELSE
-       DENP=DENP_NEW
-       VISP=VISP_NEW
-       VISM=VISM_NEW
-       SURF=SURF_NEW
-       
+      DENP=DENP_NEW
+      VISP=VISP_NEW
+      VISM=VISM_NEW
+      SURF=SURF_NEW      
       DEN_DIFF=DENP_NEW-DENM
       VIS_DIFF=VISP_NEW-VISM_NEW
       ENDIF
       ENDIF
 
-      NTIME=NTIME+1
-
-      IF (IBMON.NE.0) THEN
-         FCVAVG=0.
-      ENDIF
-
-C-----determine time step (DT)
-      DT_OLD=DT
-
-      !this is coded refering 'capillary wave' at wikipedia
-      IF( TIME_ST .EQ. 0. ) THEN
-      DT_SOURCE=1000000.  !VERY SMALL NUMBER FOR AVODING DEVIDED BY ZERO
-      ELSE
-      DT_SOURCE=1000.
-       IF (N3M .EQ. 1 ) THEN
-      K=1
-!$OMP PARALLEL DO private(I,DX1,DX2,DT_TMP1,DT_TMP2)
-!$OMP&firstprivate(K)
-!$OMP&reduction(MIN:DT_SOURCE)
-      DO J=1,N2M
-      DO I=1,N1M
-        IF ( ABS(PSI_CN(I,J,K)-0.5) .LT. 0.5 ) THEN
-           DX1=MIN(SDX(I),SDY(J))
-           DT_TMP1=0.5*DX1/SQRT(TIME_ST/DX1+TIME_GV*DX1)
-           DX2=MAX(SDX(I),SDY(J))
-           DT_TMP2=0.5*DX2/SQRT(TIME_ST/DX2+TIME_GV*DX2)
-           DT_SOURCE=MIN(DT_SOURCE,DT_TMP1,DT_TMP2)
-        ENDIF
-      ENDDO
-      ENDDO
-       ELSE IF (N1M .EQ. 1 ) THEN
-      I=1
-!$OMP PARALLEL DO private(J,DX1,DX2,DT_TMP1,DT_TMP2)
-!$OMP&firstprivate(I)
-!$OMP&reduction(MIN:DT_SOURCE)
-      DO K=1,N3M
-      DO J=1,N2M
-        IF ( ABS(PSI_CN(I,J,K)-0.5) .LT. 0.5 ) THEN
-           DX1=MIN(SDY(J),SDZ(K))
-           DT_TMP1=0.5*DX1/SQRT(TIME_ST/DX1+TIME_GV*DX1)
-           DX2=MAX(SDY(J),SDZ(K))
-           DT_TMP2=0.5*DX2/SQRT(TIME_ST/DX2+TIME_GV*DX2)
-           DT_SOURCE=MIN(DT_SOURCE,DT_TMP1,DT_TMP2)
-        ENDIF
-      ENDDO
-      ENDDO
-       ELSE
-!$OMP PARALLEL DO private(I,J,DX1,DX2,DT_TMP1,DT_TMP2)
-!$OMP&reduction(MIN:DT_SOURCE)
-      DO K=1,N3M
-      DO J=1,N2M
-      DO I=1,N1M
-        IF ( ABS(PSI_CN(I,J,K)-0.5) .LT. 0.5 ) THEN
-             DX1=MIN(SDX(I),SDY(J),SDZ(K))
-           DT_TMP1=0.5*DX1/SQRT(TIME_ST/DX1+TIME_GV*DX1)
-             DX2=MAX(SDX(I),SDY(J),SDZ(K))
-           DT_TMP2=0.5*DX2/SQRT(TIME_ST/DX2+TIME_GV*DX2)
-           DT_SOURCE=MIN(DT_SOURCE,DT_TMP1,DT_TMP2)
-        ENDIF
-      ENDDO
-      ENDDO
-      ENDDO
-      ENDIF
-
-      ENDIF
-
-      CALL CFL(IMPL,CFLM,U,V,W)
-
-      CFLCONVMAX=CFLMAX
-      CFLSURFMAX=CFLMAX
-
-      CFL_SURF=DT/DT_SOURCE
-      IF (IDTOPT .EQ. 1) THEN
-C-----DT_DETERMINE 1ND TYPE
-        CFL_SUM=0.5*(CFLM+SQRT(CFLM**2+4*CFL_SURF))
-        DT=DT*CFLCONVMAX/CFL_SUM
-!C-----DT_DETERMINE 2ND TYPE
-!        CFL_SUM=CFLM+CFL_SURF
-!        DT=DT*AMIN1(CFLCONVMAX/CFLM,CFLSURFMAX/CFL_SURF)
-      ENDIF
-
-      IF ( DT/DT_OLD .GT. 2. ) THEN
-        DT=DT_OLD*1.2    !CHECK LATTER, SMOOTH STARTING WHEN INITIAL VEL. IS ZERO.
-        WRITE(*,*) 'DT CHANGE IS LARGE ALGORITHM IS ACTIVATED'
-      ENDIF
-
-      CFL_MAX=MAX(CFLM,CFL_SURF)
-      IF (CFL_MAX .GT.(CFLMAX*1.1)) THEN
-      PRINT*,' '
-!      WRITE(*,310) NTIME,CFLM,TIME
-      WRITE(*,320) NTIME,TIME,DT
-      WRITE(*,*) 'CFL NUMBER IS EXCEEDED!!'
-      ELSE
-      PRINT*,' '
-      WRITE(*,320) NTIME,TIME,DT
-      ENDIF
-
-      WRITE(*,153) CFLM,CFL_SURF,CFL_SUM
-  153 FORMAT('CFL_CON= ',F7.4,'  CFL_SURF= ',F7.4,'  CFLSUM= ',F7.4)
-C-----MAIN SOLVER-------------------------------------------------------
-      IF ( IMPL .EQ. 0 ) THEN
-        ITER_NS=3
-
+      IF (IBMON.NE.0) FCVAVG=0.
+      
+!-----determine time step (DT)
+      CALL DETERMINE_DT(CFLM,u,v,w,PSI_CN)            
+!-----MAIN SOLVER------------------------------------------------------!
+! the IMPL condition has been taken out to avoid confusion (2017.06.10)!
+      ITER_NS=3
+        
       ALLOCATE(RK3XO(M1M,M2M,M3M),RK3YO(M1M,M2M,M3M),RK3ZO(M1M,M2M,M3M))
       ALLOCATE(ANPSO(M1M,M2M,M3M))
 !$OMP PARALLEL DO private(I,J)
@@ -780,178 +365,59 @@ C-----MAIN SOLVER-------------------------------------------------------
        ENDDO
 
       DO 2000 MSUB=1,3                    ! SUB-ITERATION(K=1,2,3)
-      ALPHA_RK3=0.5*(GAMMA(MSUB)+RO(MSUB))
-      ACOEF=ALPHA_RK3*DT
-      ACOEFI=1./ACOEF
-      DTCONST=2.*ALPHA_RK3*DT
-      DTCONSTI=1./DTCONST
+      ALPHA_RK3= 0.5D0*(GAMMA(MSUB)+RO(MSUB))
+      ACOEF    = ALPHA_RK3*DT
+      ACOEFI   = 1D0/ACOEF
+      DTCONST  = 2D0*ALPHA_RK3*DT
+      DTCONSTI = 1D0/DTCONST
 
-      CALL real_time(SGSTIME_B(MSUB))
-      IF(ILES .EQ. 1) CALL SGSCALC(U,V,W,PSI_CN,IFILTER,IREAD)
-!      IF (ILES .EQ. 1) CALL RHSSGS !we just modify VIS
-      CALL real_time(SGSTIME_E(MSUB))
-
-      CALL RHSNLHS(ITRACKING,IPOISS,U,V,W,P,PSI_XN,PSI_YN,PSI_ZN,PSI_CN
+      ! CALL real_time(SGSTIME_B(MSUB))
+      ! IF(ILES .EQ. 1) CALL SGSCALC(U,V,W,PSI_CN,IFILTER,IREAD)
+      ! CALL real_time(SGSTIME_E(MSUB))
+      
+      CALL RHSNLHS(ITRACKING,U,V,W,P,PSI_XN,PSI_YN,PSI_ZN,PSI_CN
      &,RK3XO,RK3YO,RK3ZO,ANPSO,QVOL_ORI,VOL1)
-!        write(*,*) 'no navier-stokes'
 
-!        T=8.
-!!$OMP PARALLEL DO private(I,J,xx,yy)
-!        DO K=1,N3M
-!        DO J=1,N2M
-!        DO I=1,N1M
-!        XX=X(I)
-!        YY=YP(J)
-!         U(I,J,K)=-2.*SIN(PI*XX)**2*SIN(PI*YY)*COS(PI*YY)*COS(PI*TIME/T)
-!        XX=XP(I)
-!        YY=Y(J)
-!         V(I,J,K)=2.*SIN(PI*XX)*COS(PI*XX)*SIN(PI*YY)**2*COS(PI*TIME/T)
-!         W(I,J,K)=0.
-!        ENDDO
-!        ENDDO
-!        ENDDO
-!
-!!$OMP PARALLEL DO private(I,J)
-!        DO K=1,N3M
-!        DO J=1,N2M
-!        DO I=1,N1M
-!          U(I,J,K)=2.*(SIN(PI*X(I))**2)*SIN(2*PI*YP(J))
-!     &                                *SIN(2*PI*ZP(K))*COS(PI*TIME/3.)
-!          V(I,J,K)=-SIN(2*PI*XP(I))*(SIN(PI*Y(J))**2)
-!     &                                *SIN(2*PI*ZP(K))*COS(PI*TIME/3.)
-!          W(I,J,K)=-SIN(2*PI*XP(I))*SIN(2.*PI*YP(J))
-!     &                             *(SIN(PI*Z(K))**2)*COS(PI*TIME/3.)
-!       ENDDO
-!       ENDDO
-!       ENDDO
 
-      CALL real_time(ALVS_B(MSUB))
-       IF (ITRACKING.NE.0) THEN
-      WRITE(*,*)'>>>>>>>>TRACKING CACULATION START>>>>>>>>'  
-          CALL TRANSPORT(MCLS,MGLOBAL,U,V,W,PSI_CN,VOL_TOT_ORI)
-          CALL GRID_COUPLING(0,PSI_XN,PSI_YN,PSI_ZN,PSI_CN)
- !        write(*,*) '##################transport is removed!!'
-      WRITE(*,*)'<<<<<<<<<TRACKING CACULATION END<<<<<<<<<'    
+      CALL real_time(ALVS_B(MSUB)) 
+      IF (ITRACKING.NE.0) THEN
+       WRITE(*,*)'>>>>>>>>TRACKING CACULATION START>>>>>>>>'  
+       CALL TRANSPORT(U,V,W,PSI_CN,VOL_TOT_ORI)                                                                   
+       CALL GRID_COUPLING(0,PSI_XN,PSI_YN,PSI_ZN,PSI_CN)
+       WRITE(*,*)'<<<<<<<<<TRACKING CACULATION END<<<<<<<<<'      
        ENDIF    
       CALL real_time(ALVS_E(MSUB))
 
+      CALL CONVRGE1(DVMAX,U,V,W)          ! CONVERGENCY CHECK for FLOW
+      IF (DVMAX.GT.RESID_POI)  WRITE(*,300) NTIME,DVMAX,TIME
+ 300  FORMAT(I15,'  LOCAL RESIDUE FOR MASS FLOW CONSV.:',ES18.5,
+     &             ' AT ',ES11.4)      
+
+      
  2000  CONTINUE
       DEALLOCATE(RK3XO,RK3YO,RK3ZO)
       DEALLOCATE(ANPSO)
-       ELSE IF (IMPL .EQ. 1 ) THEN
-!       MSUB=1
-!       ALPHA_RK3=0.5    !BECAUSE 2*ALPHI=1
-!      DTCONST=DT
-!      DTCONSTI=1./DTCONST
-!
-!      WRITE(*,154) CFLM,CFL_SURF,CFLM_GRAV,CFL_SUM
-!  154 FORMAT('CFL_CON= ',F7.4,'  CFL_SURF= ',F7.4,'  CFL_GRAV= ',F7.4
-!     &                                              ,'  CFLSUM= ',F7.4)
-!
-!      IF (IPS.EQ.1) CALL RHSPSCD1(U,V,W,T)
-!      IF (IPS.EQ.1 .AND. IBMON.EQ.2) CALL RHS_IBM_PS
-!
-!       CALL RHSNLHS_CN2(ITER_NS)
-!!            write(*,*) 'no rhsnlhs'
-!
-!      CALL real_time(ALVS_B(1))
-!       IF (ITRACKING.NE.0) THEN
-!      WRITE(*,*)'>>>>>>>>TRACKING CACULATION START>>>>>>>>'  
-!          CALL TRANSPORT(MCLS,MGLOBAL,U,V,W,PSI_CN,VOL_TOT_ORI)
-!!        write(*,*) '##################transport is removed!!'
-!      WRITE(*,*)'<<<<<<<<<TRACKING CACULATION END<<<<<<<<<'    
-!       ENDIF 
-!      CALL real_time(ALVS_E(1))
-
-!      IF (IPS.EQ.1) CALL LHSPS(U,V,W)
-
-      ENDIF
-
-!       PHI_MAX=-10000.
-!       PHI_MIN=10000.
-!      DO K=1,N3M
-!      DO J=1,N2M
-!      DO I=1,N1M
-!       PHI_MAX=MAX(PHI_MAX,P(I,J,K))
-!       PHI_MIN=MIN(PHI_MIN,P(I,J,K))
-!      ENDDO
-!      ENDDO
-!      ENDDO
-!        WRITE(*,965) TIME,PHI_MAX,PHI_MIN,ABS(PHI_MAX-PHI_MIN)-36.5
-!      CLOSE(923)
-! 965   FORMAT(4es15.5)
-
-c-----MAXIMUM_VEL
-      IF (DENR .EQ. 1.) THEN
-      DEN_DIFFI=0.
-      ELSE
-      DEN_DIFFI=1./DEN_DIFF
-      ENDIF
-       U_MAX=0.
-       E_SUM=0.
-       VOL=0.
-       U_BUB_AVG=0.
-       VOL_BUB=0.
-!$OMP PARALLEL DO private(I,J,DVOL,DEN_CN,UU,VV,WW,VEL_KIM)
-!$OMP&reduction(MAX:U_MAX)
-!$OMP&reduction(+:E_SUM,VOL,U_BUB_AVG,VOL_BUB)
-      DO K=1,N3M
-      DO J=1,N2M
-      DO I=1,N1M
-        IF (FUNCBODY(XP(I),YP(J),ZP(K)) .GT. 0.) THEN
-           DVOL=SDX(I)*SDY(J)*SDZ(K)
-           DEN_CN=DENM+DEN_DIFF*PSI_CN(I,J,K)
-           UU=0.5*(U(I,J,K)+U(IPV(I),J,K))
-           VV=0.5*(V(I,J,K)+V(I,JPV(J),K))
-           WW=0.5*(W(I,J,k)+W(I,J,KPV(K)))
-           VEL_KIM=UU**2+VV**2+WW**2
-
-           U_MAX=MAX(U_MAX,sqrt(VEL_KIM))
-           E_SUM=E_SUM+0.5*DEN_CN*VEL_KIM*DVOL
-           VOL=VOL+DVOL
-
-           !BUBBLE_BULK_VELOCITY
-           U_BUB_AVG=U_BUB_AVG+W(I,J,K)*DVOL*(1.-PSI_CN(I,J,K)) 
-           VOL_BUB=VOL_BUB+DVOL*(1.-PSI_CN(I,J,K))
-        ENDIF
-      ENDDO
-      ENDDO
-      ENDDO
-         E_AVG=E_SUM/VOL
-         IF(VOL_BUB.NE.0.) U_BUB_AVG=U_BUB_AVG/VOL_BUB
-         write(*,966) TIME,U_MAX,E_AVG
- 966  format ('time',f10.5,' u_max',es10.3,' e_avg',es10.3)
-
-      OPEN(923,FILE='0VEL,ENER.DAT',POSITION='APPEND')
-       WRITE(923,924) TIME,U_MAX,U_BUB_AVG,E_AVG !TIME IS N TIME, NOT N+1 TIME. 
- 924   FORMAT(4ES15.5)                           !SO I USE PSI_CN(I,J,K)
-      CLOSE(923)
-c-----MAXIMUM_VEL
-C-----------------------------------------------------------------------
+      
+!-----MAXIMUM_VEL-------------------------------------------------------
+!-----THIS SHOULD BE TAKEN OUT IN CASE OF STABLE CAL. AS THIS CONSUMES--
+!-----SIGNIFICANT AMOUNT OF CPU TIME------------------------------------      
+      CALL MAXIMUM_VEL_KIM(U,V,W,PSI_CN)
 
       TIME=TIME+DT
-
-      CALL CONVRGE1(DVMAX,U,V,W)          ! CONVERGENCY CHECK for FLOW
-      IF (DVMAX.GT.RESID_POI) THEN
-         WRITE(*,300) NTIME,DVMAX,TIME
-      ENDIF
-
-!      CALL MASSCHECK(QMMAX)
-
+      
       IF (MOD(NTIME,NPIN).EQ.0) THEN
          IHIST=IHIST+1
          CALL WRITEHISTORY(CFLM,DVMAX,QMMAX)
       ENDIF
 
       IF ((NTEST.NE.0) .AND. (MOD(M,NTPRINT).EQ.0)) THEN
-        CALL TRACER(U,V,W,P,NTEST,NTPRINT,NTEST2,ITR,JTR,KTR
+        CALL TRACER(U,V,W,P,ITR,JTR,KTR
      &,ITR2,JTR2,KTR2)
       ENDIF
        
       IF (MOD(NTIME,NPRINT).EQ.0) THEN
          CALL WRITEFIELD(NV,IHIST,U,V,W,P,VOL_TOT_ORI,QVOL_ORI)  ! binary file
       ENDIF
-
 
       IF (IAVG .EQ. 1) CALL FIELD_AVG_RT(IHIST,NAV,U,V,W,P,PSI_CN)
       IF (IAVG .EQ. 2) CALL FIELD_AVG_XYZ(IHIST,NAV,U,V,W,P,PSI_CN)
@@ -994,12 +460,12 @@ C-----------------------------------------------------------------------
 
       CLOSE(100)
       CLOSE(13)
-      IF (ILES  .EQ. 1) CLOSE(89)
+      ! IF (ILES  .EQ. 1) CLOSE(89)
       IF (NTEST .NE. 0) CLOSE(91)
       IF (NTEST .NE. 0) CLOSE(92)
       IF (NTEST .NE. 0) CLOSE(93)
       IF (NTEST .NE. 0) CLOSE(94)
-      IF (ILES  .EQ. 1) CLOSE(95)
+      ! IF (ILES  .EQ. 1) CLOSE(95)
       IF (ICH   .NE. 0) CLOSE(96)
       IF (IPS   .EQ. 1) CLOSE(97)
       CLOSE(87)
@@ -1019,485 +485,580 @@ C-----------------------------------------------------------------------
       STOP
       END
 
-C===============================================================
-C     SUBROUTINES FOR INPUT AND OUTPUT
-C===============================================================
+!===============================================================
+!     SUBROUTINS FOR INPUT AND OUTPUT
+!===============================================================
 
-C*******************************************************************
-C     SUBROUTINE MAKEFLD
-C*******************************************************************
-C     THIS SUBROUTINE IS ON lica_**.f
-
-C*******************************************************************
-      SUBROUTINE PREFLD(IHIST,fileprevel,IDTOLD,U,V,W,P,IPZERO
-     &,VOL_TOT_ORI,QVOL_ORI)
-C*******************************************************************
+!**********************************************************************
+      SUBROUTINE INPUT_SIMULATION(gridfile,fileprevel)
+!**********************************************************************      
+      
       USE FLOW_VAR
-      USE TWO_PHASE_PROPERTY
-
-      USE PARAM_VAR
       USE FLOW_GEOM_VAR
-
-      USE LVS_VAR
-      USE LVS_GEOM_VAR
-
+      USE FLD_AVG
+      USE MG_OPTION
       USE HEAT_VAR
+      !USE LES_VAR
+      USE IBM_VAR
+      USE LVS_VAR
+      USE TWO_PHASE_PROPERTY 
 
-      CHARACTER*30 fileprevel
-
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL P(0:M1,0:M2,0:M3)
-
-      REAL VOL_TOT_ORI(MLVS)
+      IMPLICIT NONE
       
-      REAL QVOL_ORI
-
-!     dum for future use
-      READ(12,1001) N1,N2,N3
-      READ(12,1002) IHIST,M,TIME,DT_O
-      READ(12,1003) IPSS,IIPX,IIPY,IIPZ,PRAA
-      READ(12,1004) QVOL_ORI
-      READ(12,1005) ((( U(I,J,K) ,I=1,N1),J=0,N2),K=0,N3)
-      READ(12,1005) ((( V(I,J,K) ,I=0,N1),J=1,N2),K=0,N3)
-      READ(12,1005) ((( W(I,J,K) ,I=0,N1),J=0,N2),K=1,N3)
-      READ(12,1005) ((( P(I,J,K) ,I=1,N1M),J=1,N2M),K=1,N3M)
-
-      !LVS
-      READ(12,1011) N1F,N2F,N3F
-      READ(12,1012) DENR,VISR,FR,SURF_J,FK,RE_AIR
-
-      READ(12,1013) NLVS,N_MAX
-      READ(12,1014) (VOL_TOT_ORI(LLVS), LLVS=1,NLVS)
-      READ(12,1015) ((NUMA(N,LLVS) ,N=1,N_MAX),LLVS=1,NLVS)
-      DO LLVS=1,NLVS
-       DO N=1,N_MAX
-        DO NN=1,NUMA(N,LLVS)
-        READ(12,1016) I,J,K,ALPHI_TMP
-         I_B(NN,N,LLVS)=I
-         J_B(NN,N,LLVS)=J
-         K_B(NN,N,LLVS)=K
-         ALPHI(NN,N,LLVS)=ALPHI_TMP
-        ENDDO
-       ENDDO
-      ENDDO
+      INTEGER*8   IERR
       
-      IF (IPS.EQ.1) THEN
-      IF (IPSS.EQ.0) THEN
-       CALL MAKEFLD_TEMP
-      ELSE IF (IPSS.EQ.1) THEN
-       READ(12,1006) PRM,SCR,TCR
-       READ(12,1005) ((( T(I,J,K) ,I=0,N1),J=0,N2),K=0,N3)
-      ENDIF
-      ENDIF
+      CHARACTER*10 DUMMY
+      CHARACTER*30 gridfile,fileprevel
+      REAL*8       PI
+      PI=ACOS(-1.)
+      
+!C=====read input file
+      OPEN(10,FILE='lica.in')
+      READ(10,*) DUMMY
+      READ(10,*) IRESET,IREAD,IAVG,IPZERO,IDTOLD,EPS_PTR
+      READ(10,*) DUMMY
+      READ(10,*) NTST,NPRINT,NPRIAVG,NPIN
+      READ(10,*) DUMMY
+      READ(10,*) IMPL,IDTOPT,DT,CFLMAX
+      READ(10,*) DUMMY
+      READ(10,*) RESID_POI,NLEV,IWC,NBLI,MGITR,IOLDV,IMGSOR,WWSOR,IPCG
+      READ(10,*) DUMMY
+      READ(10,*) IPS ! ,IPHS
+      ! READ(10,*) DUMMY
+      ! READ(10,*) ILES,ISGSMOD,DYNMON,CSGS,CSGSPS,IFILTER
+      READ(10,*) DUMMY
+      READ(10,*) IBMON,MASSON
+      READ(10,*) DUMMY
+      READ(10,*) IPOISS
+      READ(10,*) DUMMY
+      READ(10,*) ICH,IPX,IPY,IPZ
+      READ(10,*) DUMMY
+      READ(10,*) DUMMY
+      READ(10,*) ITRACKING,MCLS,MGLOBAL
+      READ(10,*) DUMMY
+      READ(10,*) RE_AIR,VISR,DENR
+      READ(10,*) DUMMY
+      READ(10,*) SURF_J,FR,FK
+      READ(10,*) DUMMY
+      READ(10,*) PRM,SCR,TCR
+      READ(10,*) DUMMY
+      READ(10,*) DUMMY
+      READ(10,'(a)') gridfile
+      READ(10,'(a)') fileprevel
+      READ(10,*) DUMMY
+      READ(10,*) NTEST,NTPRINT
+            READ(10,*) DUMMY
+      READ(10,*) NLVS
+            READ(10,*) DUMMY
 
- 1001   FORMAT(3I8)
- 1002   FORMAT(2I8,2ES20.12)
- 1003   FORMAT(4I8,1ES20.12)
- 1004   FORMAT(1ES20.12)
- 1005   FORMAT(5ES20.12)
- 1006   FORMAT(3ES20.12)
- 
- 1011   FORMAT(3I8)
- 1012   FORMAT(6ES20.12)
- 1013   FORMAT(2I8)
- 1014   FORMAT(8ES20.12)
- 1015   FORMAT(8I8)
- 1016   FORMAT(3I8,1ES20.12)
+      WRITE(*,101) IRESET,IREAD,IAVG,IDTOLD
+      WRITE(*,103) NTST,NPRINT,NPRIAVG,NPIN
+      WRITE(*,105) IMPL,IDTOPT,DT,CFLMAX
+      WRITE(*,109) RESID_POI,NLEV,IWC,NBLI,MGITR,IOLDV,IMGSOR,WWSOR
+      WRITE(*,110) IPS
+!      WRITE(*,111) ILES,ISGSMOD,DYNMON,CSGS,CSGSPS,IFILTER
+      WRITE(*,113) IBMON,MASSON
+      WRITE(*,115) IPOISS
+      WRITE(*,117) ICH,IPX,IPY,IPZ
+      WRITE(*,119) ITRACKING,MCLS,MGLOBAL
+      WRITE(*,121) RE_AIR,VISR,DENR
+      WRITE(*,123) SURF_J,FR,FK
+      WRITE(*,125) gridfile
+      IF (IREAD .EQ. 1) WRITE(*,127) fileprevel
+     
+ 101  FORMAT('IRESET=',I8,'  IREAD=',I9,'  IAVG=',I10,
+     &       '  IPZERO=',I8,'  IDTOLD=',F7.2)
+ 103  FORMAT('NTST=',I10,'  NPRINT=',I8,'  NPRIAVG=',I7,'  NPIN=',I10)
+ 105  FORMAT('IMPL=',I10,'  IDTOPT=',I8,'  DT=',ES12.4,
+     &       '  CFLMAX=',F8.2)
+!107  FORMAT('IUD=',I11,'  IEND=',I10,'  IENDM=',I9,'  ALPZ=',F10.4)
+ 109  FORMAT('RESID=',ES9.2,'  NLEV=',I10,'  IWC=',I11,'  NBLI=',I10
+     &      ,'  MGITR=',I9,'  IOLDV=',I9,'  IMGSOR=',I8,'  WWSOR=',F9.3)
+ 110  FORMAT('IPS=',I11)
+ 111  FORMAT('ILES=',I10,'  ISGSMOD=',I7,'  DYNMON=',L8,
+     &       '  CSGS=',F10.4,'  CSGSPS=',F8.4,'  IFILTER=',I7)
+ 113  FORMAT('IBMON=',I9,'  MASSON=',I8)
+ 115  FORMAT('IPOISS=',I9)
+ 117  FORMAT('ICH=',I9,'  IPX=',I8,'  IPY=',I8,'  IPZ=',I8)
+ 119  FORMAT('ITRACKING=',I9,'  MCLS=',I8,'  MGLOBAL=',I8)
+ 121  FORMAT('RE_AIR=',F12.5,'  VISR=',F12.5,'  DENR=',F12.5)
+ 123  FORMAT('SUR_J=',F12.5,'  FR=',F12.5,'  FK=',F12.5)
+ 125  FORMAT('GRID=   ',A30)
+ 127  FORMAT('FIELD_READ=   ',A30) 
 
+!100  FORMAT('INITIAL FIELD TREATMNT:                READING DONE')
 
-      IF (IPZERO .EQ. 1) P=0.
-
-      WRITE(*,*)' '
-      WRITE(*,100)
-      WRITE(*,101)
-      WRITE(*,102) fileprevel
-      WRITE(*,104) N1,N2,N3
-      WRITE(*,105) IHIST,M,TIME,DT_O
-      WRITE(*,106) IPSS,PRAA
-
-  100 FORMAT('----------- INITIAL FIELD INFORMATION -----------')
-  101 FORMAT('INITIAL FIELD      : READING DONE')
-  102 FORMAT('INITIAL FIELD NAME : ',A30)
-  104 FORMAT('N1=',I12,'  N2=',I12,'  N3=',I12)
-  105 FORMAT('IHIST=',I9,'  M=',I13,'  TIME=',F10.5,'  DT=',F12.8)
-  106 FORMAT('IPS=',I11,'  PRA=',F11.3)
-
-       IF (IDTOLD .EQ. 1) THEN
-        DT=DT_O
-        WRITE(*,*) 'DT_OLD IS USED'
-       ELSE
-        WRITE(*,*) 'DT_NEW IS USED'
+       IF (ICH .EQ. 0 ) THEN
+       WRITE(*,*) 'NO-MEAN_PRESSURE GRADIENT'
+       ELSE IF (ICH .EQ. 1 ) THEN
+       WRITE(*,*) 'MASS-FLOW RATE CONST'
+       ELSE IF (ICH .EQ. 2 ) THEN
+       WRITE(*,*) 'PRESSURE GRADIENT CONST'
        ENDIF
 
-      DO LLVS=1,NLVS
-       NUMA_MAX=0
-       DO N=1,N_MAX
-         NUMA_MAX=max(NUMA_MAX,NUMA(N,LLVS))
-       ENDDO
-        WRITE(*,*) 'NUMA_MAX/MF_BAND=',FLOAT(NUMA_MAX)/FLOAT(MF_BAND)
-      ENDDO
+!============================FOR TWO-PHASE=============================C
+      RE=RE_AIR
+      REI=1./RE
 
-      RETURN
+      DENM=1.        !NON-DIMENSIONALIZED DEN
+      DENP=DENR
+      DEN_DIFF=DENP-DENM
+      IF (DENR .EQ. 1D0) THEN
+      DEN_DIFFI=0D0
+      ELSE
+      DEN_DIFFI=1D0/DEN_DIFF
+      ENDIF
+
+      VISM=1.*REI    !NON-DIMENSIONALIZED VIS
+      VISP=VISR*REI
+      VIS_DIFF=VISP-VISM
+
+      REM=RE_AIR
+      REP=REM*DENR/VISR
+      
+      DENSCM=DENM*1. !SPECIFIC HEAT CAPACITY
+      DENSCP=DENSCM*(DENR*SCR)
+      DENSC_DIFF=DENSCP-DENSCM
+      
+      TCM=1.         !THERMAL CONDUCTIVITY
+      TCP=TCR
+      TC_DIFF=TCP-TCM
+      
+      PRM=PRM         !PRANDTL NUMBER
+      PRP=PRM*VISR*SCR/TCR
+      
+      PRA=PRM
+      PRAI=1./PRM
+      
+      IF ( SURF_J .EQ. 0. ) THEN
+       SURF=0.
+      ELSE
+       SURF=1./SURF_J  !SURF_J IS WEBER NUMBER
+      ENDIF
+
+      IF (ICH .EQ. 2) THEN
+       PMI_CONST=-FK
+      ELSE
+        PMI_CONST=0.
+      ENDIF
+
+      IF(FR .EQ. 0.) THEN
+        GRAVITY=0.
+      ELSE
+        GRAVITY=1./FR**2
+      ENDIF
+
+      TIME_ST=SURF*PI/(DENM+DENP)
+      TIME_GV=DEN_DIFF/(DENM+DENP)*GRAVITY/PI
+
+      PRINT*,'MEAN PRESSURE GRADIENT :',FK
+      PRINT*,'SURF_J :',SURF_J
+      PRINT*,'FR :',FR
+      PRINT*,'DENSITY_RATIO :',DENR
+      PRINT*,'VISCOSITY_RATIO :',VISR
+      PRINT*,'RE_AIR :',REM,'RE_WATER :',REP
+      PRINT*,'PR_AIR :',PRM,'PR_WATER :',PRP
+!============================FOR TWO-PHASE=============================C     
+     
+      RETURN      
       END
+      
+      
+!*******************************************************************
+      SUBROUTINE ALLOCINIT
+!*******************************************************************
 
-C*******************************************************************
-      SUBROUTINE WRITEFIELD(NV,IHIST,U,V,W,P,VOL_TOT_ORI,QVOL_ORI)
-C*******************************************************************
+      USE PARAM_VAR     
       USE FLOW_VAR
-      USE TWO_PHASE_PROPERTY
-
-      USE PARAM_VAR
       USE FLOW_GEOM_VAR
-
+      USE FLD_AVG      
+      USE HEAT_VAR
+      USE IBM_VAR
+      !USE LES_VAR            
       USE LVS_VAR
       USE LVS_GEOM_VAR
-
-      USE HEAT_VAR
+      USE LVS_COUPLING      
+      USE TIME_VAR
       
-      USE IBM_VAR
+      IMPLICIT NONE  
+      INTEGER*8   I,J,K,L,N,NN,NNVS,LLVS,IP1,JP1          
       
-      IMPLICIT NONE
+!------------------MEMORY ALLOCATAION & INITIALIZATION-----------------C
+!-----------------------------------------------------------------------      
+!      MODULE FLOW_VAR
+!-----------------------------------------------------------------------   
+      ALLOCATE(UO(0:M1,0:M2,0:M3),VO(0:M1,0:M2,0:M3),WO(0:M1,0:M2,0:M3))
+      ALLOCATE(AIU(M1),CIU(M1),AIVW(M1),CIVW(M1)
+     &        ,AJV(M2),CJV(M2),AJUW(M2),CJUW(M2)
+     &        ,AKW(M3),CKW(M3),AKUV(M3),CKUV(M3))
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL P(0:M1,0:M2,0:M3)
-
-      REAL VOL_TOT_ORI(MLVS)
-      REAL QVOL_ORI
-      
-      INTEGER NV,IHIST
-      
-      INTEGER IDUM
-      REAL DUM
-      INTEGER I,J,K,N,NN,LLVS,L
-      CHARACTER*9 tname
-      CHARACTER*3 tfn1
-      INTEGER IDG1,IDG2,IDG3,IDG4,IDG5,IDG6
-
-      idum=0
-      dum=0.
-
-      tfn1='fld'
-      idg1=ihist/100000
-      idg2=(ihist-idg1*100000)/10000
-      idg3=(ihist-idg1*100000-idg2*10000)/1000
-      idg4=(ihist-idg1*100000-idg2*10000-idg3*1000)/100
-      idg5=(ihist-idg1*100000-idg2*10000-idg3*1000-idg4*100)/10
-      idg6=ihist-idg1*100000-idg2*10000-idg3*1000-idg4*100-idg5*10
-      tname=tfn1//char(idg1+48)//char(idg2+48)//
-     &      char(idg3+48)//char(idg4+48)//char(idg5+48)//char(idg6+48)
-
-      OPEN(NV,FILE=tname)
-ccc      IVER=-2
-ccc      WRITE(NV) IVER
-      WRITE(NV,1001) N1,N2,N3
-      WRITE(NV,1002) IHIST,M,TIME,DT
-      WRITE(NV,1003) IPS,IPX,IPY,IPZ,PRA
-      WRITE(NV,1004) QVOL_ORI
-      WRITE(NV,1005) ((( U(I,J,K) ,I=1,N1),J=0,N2),K=0,N3)
-      WRITE(NV,1005) ((( V(I,J,K) ,I=0,N1),J=1,N2),K=0,N3)
-      WRITE(NV,1005) ((( W(I,J,K) ,I=0,N1),J=0,N2),K=1,N3)
-      WRITE(NV,1005) ((( P(I,J,K) ,I=1,N1M),J=1,N2M),K=1,N3M)
-
-      !LVS
-      WRITE(NV,1011) N1F,N2F,N3F
-      WRITE(NV,1012) DENR,VISR,FR,SURF_J,FK,RE_AIR
-
-      WRITE(NV,1013) NLVS,N_MAX
-      WRITE(NV,1014) (VOL_TOT_ORI(LLVS), LLVS=1,NLVS)
-      WRITE(NV,1015) ((NUMA(N,LLVS) ,N=1,N_MAX),LLVS=1,NLVS)
-      DO LLVS=1,NLVS
-       DO N=1,N_MAX
-        DO NN=1,NUMA(N,LLVS)
-         I=I_B(NN,N,LLVS)
-         J=J_B(NN,N,LLVS)
-         K=K_B(NN,N,LLVS)
-        WRITE(NV,1016) I,J,K,ALPHI(NN,N,LLVS)
-        ENDDO
+!$OMP PARALLEL DO private(I,J)
+       DO K=0,N3 ;
+       DO J=0,N2
+       DO I=0,N1
+        UO(I,J,K)=0. ;VO(I,J,K)=0.; WO(I,J,K)=0.
+       ENDDO ;ENDDO ;ENDDO
+!$OMP PARALLEL DO
+       DO I=1,N1
+        AIU(I)=0. ;CIU(I)=0. ;AIVW(I)=0. ;CIVW(I)=0.
        ENDDO
+!$OMP PARALLEL DO
+       DO J=1,N2
+        AJV(J)=0. ;CJV(J)=0. ;AJUW(J)=0. ;CJUW(J)=0.
+       ENDDO
+!$OMP PARALLEL DO
+       DO K=1,N3
+        AKW(K)=0. ;CKW(K)=0. ;AKUV(K)=0. ;CKUV(K)=0.
+       ENDDO
+       
+!-----------------------------------------------------------------------      
+!      MODULE LVS_VAR
+!----------------------------------------------------------------------- 
+      ALLOCATE( ALPHI(MF_BAND,M_MAX,MLVS))
+      ALLOCATE( NUMA(M_MAX,MLVS))
+      ALLOCATE( I_B(MF_BAND,M_MAX,MLVS),
+     &          J_B(MF_BAND,M_MAX,MLVS),
+     &          K_B(MF_BAND,M_MAX,MLVS))
+      ALLOCATE( PSIF(M1L:M1U,M2L:M2U,M3L:M3U))
+
+      ALLOCATE( MASK_BUB(M1M,M2M,M3M))
+      ALLOCATE( MASK_GLOBAL(0:M1F,0:M2F,0:M3F))     
+
+
+       DO LLVS=1,MLVS ! this is set to MLVS 2017-10-08
+       DO N=1,M_MAX
+        NUMA(N,LLVS)=0
+!$OMP PARALLEL DO
+       DO NN=1,MF_BAND
+        ALPHI(NN,N,LLVS)=0D0
+        I_B(NN,N,LLVS)=0 ;J_B(NN,N,LLVS)=0 ;K_B(NN,N,LLVS)=0
+       ENDDO;       ENDDO;       ENDDO
+
+!$OMP PARALLEL DO private(I,J)
+       DO K=M3L,M3U
+       DO J=M2L,M2U
+       DO I=M1L,M1U
+        PSIF(I,J,K)=0D0
+       ENDDO;       ENDDO;       ENDDO
+
+!$OMP PARALLEL DO private(I,J)
+       DO K=1,N3M
+       DO J=1,N2M
+       DO I=1,N1M
+        MASK_BUB(I,J,K)=0
+       ENDDO;       ENDDO;       ENDDO
+
+!$OMP PARALLEL DO private(I,J)
+       DO K=0,N3F
+       DO J=0,N2F
+       DO I=0,N1F
+        MASK_GLOBAL(I,J,K)=0
+       ENDDO;       ENDDO;       ENDDO
+       
+!-----------------------------------------------------------------------  
+!      MODULE IBM_VAR
+!-----------------------------------------------------------------------
+      ALLOCATE(QMASS(0:M1,0:M2,0:M3))
+!$OMP PARALLEL DO private(I,J)
+       DO K=1,N3M
+       DO J=1,N2M
+       DO I=1,N1M
+        QMASS(I,J,K)=0D0
+       ENDDO
+       ENDDO
+       ENDDO
+
+!-----------------------------------------------------------------------        
+!      MODULE HEAT_VAR
+!----------------------------------------------------------------------- 
+      IF (IPS .EQ. 1) THEN
+      ALLOCATE(T(0:M1,0:M2,0:M3))
+      ALLOCATE(TALPH(0:M1,0:M2,0:M3))
+      ALLOCATE(RHSPS(M1M,M2M,M3M))
+!$OMP PARALLEL DO private(I,J)
+       DO K=0,N3 ;DO J=0,N2 ;DO I=0,N1
+        T(I,J,K)=0D0
+        TALPH(I,J,K)=0D0
+       ENDDO ;ENDDO ;ENDDO
+
+!$OMP PARALLEL DO private(I,J)
+       DO K=1,N3M ;DO J=1,N2M ;DO I=1,N1M
+        RHSPS(I,J,K)=0D0
+       ENDDO ;ENDDO ;ENDDO
+      ENDIF
+      
+!-----------------------------------------------------------------------
+!      MODULE FLOW_GEOM_VAR
+!-----------------------------------------------------------------------  
+      ALLOCATE(!SGSTIME_B(3),SGSTIME_E(3),
+     &    ANSETIME_B(100),ANSETIME_E(100),POISSTIME_B(3),POISSTIME_E(3)
+     &   ,CONTINUITY_B(3),CONTINUITY_E(3),ALVS_B(3),ALVS_E(3))
+      
+       DO L=1,3
+        !SGSTIME_B(L)=0. ;SGSTIME_E(L)=0.
+        POISSTIME_B(L)=0d0    ;POISSTIME_E(L)=0d0
+        CONTINUITY_B(L)=0d0   ;CONTINUITY_E(L)=0d0
+        ALVS_B(L)=0d0         ;ALVS_E(L)=0d0
+       ENDDO
+      
+       DO L=1,100
+        ANSETIME_B(L)=0D0 ;ANSETIME_B(L)=0D0
+       ENDDO
+
+      RETURN
+      END
+          
+!======================================================================
+      SUBROUTINE SIDE_BC 
+!======================================================================   
+! LICA_CYLINDER.F90 에서 훔쳐와서 조금 바꿈   
+      !! Boundary conditions at ALL THE WALLS!!
+        ! IxT : FRONT wall (X-direction)
+        ! IxB : BACK  wall
+        ! JxT : upper wall (y-direction)
+        ! JxB : lower wall
+        ! KxT : anterior wall (z-direction)
+        ! KxB : posterior wall
+      !! Options included
+        ! y-direction : Dirichlet / Neumann
+        ! z-direction : Dirichlet / Neumann (3D)
+        !               Periodic (2D,3D)
+        ! IPX : periodic in x-direction
+        ! ICH : For channel flow
+        ! IDPDX : RE_TAU Constant
+       USE PARAM_VAR
+       USE FLOW_GEOM_VAR
+       
+       IMPLICIT NONE
+       IUT = 0 ; JUT = 0 ; KUT = 0
+       IUB = 0 ; JUB = 0 ; KUB = 0
+       IVT = 0 ; JVT = 0 ; KVT = 0
+       IVB = 0 ; JVB = 0 ; KVB = 0
+       IWT = 0 ; JWT = 0 ; KWT = 0
+       IWB = 0 ; JWB = 0 ; KWB = 0
+       
+       
+       IF (IPX .EQ. 3) THEN 
+        IUT = 1         ! 0: DIRICHLET
+        IUB = 1         ! 1: NEUMANN
+        IVT = 1         
+        IVB = 1
+        IWT = 1
+        IWB = 1
+       ENDIF
+       IF (IPY .EQ. 3) THEN 
+        JUT = 1        
+        JUB = 1        
+        JVT = 1
+        JVB = 1
+        JWT = 1
+        JWB = 1        
+       ENDIF
+       IF (IPZ .EQ. 3) THEN 
+        KUT = 1
+        KUB = 1
+        KVT = 1
+        KVB = 1
+        KWT = 1
+        KWB = 1
+       ENDIF
+        
+        
+      RETURN
+      END
+      
+!*******************************************************************
+      SUBROUTINE DETERMINE_DT(CFLM,u,v,w,PSI_CN)
+!*******************************************************************
+      USE PARAM_VAR
+      USE FLOW_VAR
+      USE FLOW_GEOM_VAR
+      USE TWO_PHASE_PROPERTY 
+      
+
+      IMPLICIT NONE
+      INTEGER*8   I,J,K
+      REAL*8      U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)    
+      REAL*8      PSI_CN(0:M1,0:M2,0:M3)      
+      REAL*8      DT_OLD,DT_SOURCE,DT_SOURCE_TMP,DX1,DX2,DT_TMP1,DT_TMP2
+      REAL*8      CFL_SURF,CFL_SUM,CFL_MAX_VAR,
+     &            CFLM,CFL_MAX,CFLCONVMAX,CFLSURFMAX
+
+
+      DT_OLD=DT
+      !this is coded refering 'capillary wave' at wikipedia
+      IF( TIME_ST .EQ. 0D0 ) THEN
+      DT_SOURCE=1000000D0  !VERY SMALL NUMBER FOR AVODING DEVIDED BY ZERO
+      ELSE
+      DT_SOURCE=1000D0
+      
+      
+      IF (N3M .EQ. 1 ) THEN
+      K=1
+!$OMP PARALLEL DO private(I,DX1,DX2,DT_TMP1,DT_TMP2)
+!$OMP&firstprivate(K)
+!$OMP&reduction(MIN:DT_SOURCE)
+      DO J=1,N2M
+      DO I=1,N1M
+        IF ( ABS(PSI_CN(I,J,K)-0.5D0) .LT. 0.5D0 ) THEN
+           DX1=MIN(SDX(I),SDY(J))
+           DT_TMP1=0.5D0*DX1/SQRT(TIME_ST/DX1+TIME_GV*DX1)
+           DX2=MAX(SDX(I),SDY(J))
+           DT_TMP2=0.5D0*DX2/SQRT(TIME_ST/DX2+TIME_GV*DX2)
+           DT_SOURCE=MIN(DT_SOURCE,DT_TMP1,DT_TMP2)
+        ENDIF
       ENDDO
-
-      IF (IPS.EQ.1) THEN
-      WRITE(NV,1006) PRM,SCR,TCR
-      WRITE(NV,1005) ((( T(I,J,K) ,I=0,N1),J=0,N2),K=0,N3)
-      ENDIF
-
-      CLOSE(NV)
-
- 1001   FORMAT(3I8)
- 1002   FORMAT(2I8,2ES20.12)
- 1003   FORMAT(4I8,1ES20.12)
- 1004   FORMAT(1ES20.12)
- 1005   FORMAT(5ES20.12)
- 1006   FORMAT(3ES20.12)
- 
- 1011   FORMAT(3I8)
- 1012   FORMAT(6ES20.12)
- 1013   FORMAT(2I8)
- 1014   FORMAT(8ES20.12)
- 1015   FORMAT(8I8)
- 1016   FORMAT(3I8,1ES20.12)
-
-      NV=NV+1
-
-      RETURN
-      END
-
-C*******************************************************************
-      SUBROUTINE WRITEHISTORY(CFLM,DVMAX,QMMAX)
-C*******************************************************************
-      USE PARAM_VAR
-      USE FLOW_GEOM_VAR
-      USE FLOW_VAR
-
-      IMPLICIT NONE
-
-      REAL CFLM,DVMAX,QMMAX
-
-      WRITE(13,130) TIME,DT,CFLM,DVMAX,QMMAX
- 130  FORMAT(F13.5,4ES15.7)
-
-      IF (ICH.NE.0) THEN
-      WRITE(96,140) TIME,PMI_DUDY,PMI
- 140  FORMAT(F13.5,3ES20.12)
-      ENDIF
-
-      RETURN
-      END
-      
-C*******************************************************************
-      SUBROUTINE WRITEHISTORY_HEAT(W,PSI_C)
-C*******************************************************************
-      USE PARAM_VAR
-      USE FLOW_GEOM_VAR
-      USE FLOW_VAR
-
-      USE TWO_PHASE_PROPERTY
-      USE HEAT_VAR
-
-      IMPLICIT NONE
-
-      REAL W(0:M1,0:M2,0:M3)
-      REAL PSI_C(0:M1,0:M2,0:M3)
-
-      INTEGER I,J,K
-      REAL AA,UU,FUNCBODY,DVOL,UU_TMP,DENSCF,AMEAN_TEMP,ANUSSET
-
-!      PSAVG=0.
-!      DO J=1,N2M
-!      TMP=0.
-!      DO K=1,N3M
-!      DO I=1,N1M
-!      TMP=TMP+T(I,J,K)
-!      ENDDO
-!      ENDDO
-!      PSAVG=PSAVG+TMP*SDY(J)
-!      ENDDO
-!      PSAVG=PSAVG/2./FLOAT(N1M*N3M)
-!
-!      DPSDYW=0.
-!      DO K=1,N3M
-!      DO I=1,N1M
-!      DPSDYW=DPSDYW+T(I,1,K)-T(I,0,K)
-!      ENDDO
-!      ENDDO
-!      DPSDYW=DPSDYW/FLOAT(N1M*N3M)*VVDY(1)
-!
-!      WRITE(97,140)TIME,PSAVG,DPSDYW
-      
-      AA=0.
-      UU=0.
-!$OMP PARALLEL DO private(I,J,DVOL,UU_TMP,DENSCF)
-!$OMP&reduction(+:AA,UU)
+      ENDDO
+       ELSE IF (N1M .EQ. 1 ) THEN
+      I=1
+!$OMP PARALLEL DO private(J,DX1,DX2,DT_TMP1,DT_TMP2)
+!$OMP&firstprivate(I)
+!$OMP&reduction(MIN:DT_SOURCE)
+      DO K=1,N3M
+      DO J=1,N2M
+        IF ( ABS(PSI_CN(I,J,K)-0.5D0) .LT. 0.5D0 ) THEN
+           DX1=MIN(SDY(J),SDZ(K))
+           DT_TMP1=0.5D0*DX1/SQRT(TIME_ST/DX1+TIME_GV*DX1)
+           DX2=MAX(SDY(J),SDZ(K))
+           DT_TMP2=0.5D0*DX2/SQRT(TIME_ST/DX2+TIME_GV*DX2)
+           DT_SOURCE=MIN(DT_SOURCE,DT_TMP1,DT_TMP2)
+        ENDIF
+      ENDDO
+      ENDDO
+       ELSE
+!$OMP PARALLEL DO private(I,J,DX1,DX2,DT_TMP1,DT_TMP2)
+!$OMP&reduction(MIN:DT_SOURCE)
       DO K=1,N3M
       DO J=1,N2M
       DO I=1,N1M
-       	IF (FUNCBODY(XP(I),YP(J),ZP(K)) .GT. 0.) THEN
-       	 DVOL=SDX(I)*SDY(J)*SDZ(K)
-
-         UU_TMP=0.5*(W(I,J,KPV(K))+W(I,J,K))
-         DENSCF=DENSCM+DENSC_DIFF*PSI_C(I,J,K)
-
-         AA=AA+DENSCF*UU_TMP*T(I,J,K)*DVOL
-         UU=UU+DENSCF*UU_TMP*DVOL
-        endif
+        IF ( ABS(PSI_CN(I,J,K)-0.5D0) .LT. 0.5D0 ) THEN
+             DX1=MIN(SDX(I),SDY(J),SDZ(K))
+           DT_TMP1=0.5D0*DX1/SQRT(TIME_ST/DX1+TIME_GV*DX1)
+             DX2=MAX(SDX(I),SDY(J),SDZ(K))
+           DT_TMP2=0.5D0*DX2/SQRT(TIME_ST/DX2+TIME_GV*DX2)
+           DT_SOURCE=MIN(DT_SOURCE,DT_TMP1,DT_TMP2)
+        ENDIF
       ENDDO
       ENDDO
       ENDDO
-
-       IF (AA .NE. 0. .AND. UU.NE. 0.) THEN
-        AMEAN_TEMP=AA/UU
-        ANUSSET=2./AMEAN_TEMP
-        WRITE(*,*) 'THETA_MEAN=',AMEAN_TEMP,'NUSSET=',ANUSSET
-       ELSE
-        AMEAN_TEMP=0.
-        ANUSSET=0.
-       ENDIF
-       
-      WRITE(97,140)TIME,ANUSSET,AMEAN_TEMP
- 140  FORMAT(F13.5,3ES20.12)
-      
-
-      RETURN
-      END
-
-C*******************************************************************
-      SUBROUTINE TRACEINIT(NTEST,NTPRINT,NTEST2,ITR,JTR,KTR
-     &,ITR2,JTR2,KTR2)
-C*******************************************************************
-      USE PARAM_VAR
-      USE FLOW_GEOM_VAR
-      
-      IMPLICIT NONE
-
-      INTEGER NTEST,NTPRINT,NTEST2
-      INTEGER ITR(10000),JTR(10000),KTR(10000)
-      INTEGER ITR2(10000),JTR2(10000),KTR2(10000)
-      
-      INTEGER N
-
-      DO 10 N=1,NTEST
-      READ(10,*) ITR(N),JTR(N),KTR(N)
-   10 CONTINUE
-      READ(10,*) NTEST2
-      IF (NTEST2.NE.0) THEN
-      DO 11 N=1,NTEST2
-      READ(10,*) ITR2(N),JTR2(N),KTR2(N)
-   11 CONTINUE
       ENDIF
 
-      PRINT*, '===== TRACE POSITION ====='
-      DO 15 N=1,NTEST
-      WRITE(*,16) N,ITR(N),JTR(N),KTR(N),
-     &            XP(ITR(N)),YP(JTR(N)),ZP(KTR(N))
-   15 CONTINUE
-      IF (NTEST2.NE.0) THEN
-      PRINT*, '===== TRACE POSITION 2 ====='
-      DO 17 N=1,NTEST2
-      WRITE(*,16) N,ITR2(N),JTR2(N),KTR2(N),
-     &            XP(ITR2(N)),YP(JTR2(N)),ZP(KTR2(N))
-   17 CONTINUE
       ENDIF
-   16 FORMAT(I5,3I6,3F12.5)
 
+      CALL CFL(CFLM,U,V,W)
+      
+      CFLCONVMAX=CFLMAX
+      CFLSURFMAX=CFLMAX
+      CFL_SURF=DT/DT_SOURCE
+      
+      
+      IF (IDTOPT .EQ. 1) THEN
+!-----DT_DETERMINE 1ND TYPE
+        CFL_SUM=0.5D0*(CFLM+DSQRT(CFLM**2+4D0*CFL_SURF))
+        DT=DT*CFLCONVMAX/CFL_SUM
+!-----DT_DETERMINE 2ND TYPE
+!        CFL_SUM=CFLM+CFL_SURF
+!        DT=DT*AMIN1(CFLCONVMAX/CFLM,CFLSURFMAX/CFL_SURF)
+      else 
+      cfl_sum = (cflm+cfl_surf) ! temporary: no background
+      ENDIF
+
+      IF ( DT/DT_OLD .GT. 2D0 ) THEN
+        DT=DT_OLD*1.2D0    !CHECK LATTER, SMOOTH STARTING WHEN INITIAL VEL. IS ZERO.
+        WRITE(*,*) 'DT CHANGE IS LARGE ALGORITHM IS ACTIVATED'
+      ENDIF
+
+      CFL_MAX=DMAX1(CFLM,CFL_SURF)
+      IF (CFL_MAX .GT.(CFLMAX*1.1D0)) THEN
+      PRINT*,' '
+!      WRITE(*,310) NTIME,CFLM,TIME
+      WRITE(*,320) NTIME,TIME,DT
+      WRITE(*,*) 'CFL NUMBER IS EXCEEDED!!'
+      ELSE
+      PRINT*,' '
+      WRITE(*,320) NTIME,TIME,DT
+      ENDIF
+      WRITE(*,153) CFLM,CFL_SURF,CFL_SUM
+      !WRITE(*,*) CFLM,CFL_SURF,CFL_SUM
+      
+      
+ 310  FORMAT(I15,'  CFL# EXCEED GIVEN CFL LIMIT :',ES18.5,
+     &             ' AT TIME',F12.5)
+ 320  FORMAT('--------------------------',I6,'  TIME=',F10.5,
+     &             '  DT=',F12.8)
+ 153  FORMAT('CFL_CON= ',F7.4,'  CFL_SURF= ',F7.4,'  CFLSUM= ',F7.4)
+      
       RETURN
       END
+      
+      
+!*******************************************************************
+      SUBROUTINE MAXIMUM_VEL_KIM(U,V,W,PSI_CN)
+!*******************************************************************
 
-C*******************************************************************
-      SUBROUTINE TRACER(U,V,W,P,NTEST,NTPRINT,NTEST2,ITR,JTR,KTR
-     &,ITR2,JTR2,KTR2)
-C*******************************************************************
       USE PARAM_VAR
-      USE FLOW_GEOM_VAR
-
       USE FLOW_VAR
+      USE FLOW_GEOM_VAR
+      USE TWO_PHASE_PROPERTY
       
       IMPLICIT NONE
       
-      INTEGER N
+      INTEGER*8 I,J,K
+      REAL*8 FUNCBODY
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 PSI_CN(0:M1,0:M2,0:M3)      
+      REAL*8 U_MAX,E_SUM,VOL,U_BUB_AVG,VOL_BUB
+      REAL*8 DVOL,DEN_CN
+      REAL*8 UU,VV,WW,VEL_KIM,E_AVG
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL P(0:M1,0:M2,0:M3)
-
-      INTEGER NTEST,NTPRINT,NTEST2
-      INTEGER ITR(10000),JTR(10000),KTR(10000)
-      INTEGER ITR2(10000),JTR2(10000),KTR2(10000)
-
-      WRITE(91,101)TIME,(0.5*(U(ITR(N),JTR(N),KTR(N))
-     &                       +U(ITR(N)+1,JTR(N),KTR(N))),N=1,NTEST)
-      WRITE(92,101)TIME,(0.5*(V(ITR(N),JTR(N),KTR(N))
-     &                       +V(ITR(N),JTR(N)+1,KTR(N))),N=1,NTEST)
-      WRITE(93,101)TIME,(0.5*(W(ITR(N),JTR(N),KTR(N))
-     &                       +W(ITR(N),JTR(N),KPV(KTR(N)))),N=1,NTEST)
-      WRITE(94,101)TIME,(P(ITR(N),JTR(N),KTR(N)),N=1,NTEST)
-!      WRITE(91,101)TIME,(U(ITR(N),JTR(N),KTR(N)),N=1,NTEST)
-!      WRITE(92,101)TIME,(V(ITR(N),JTR(N),KTR(N)),N=1,NTEST)
-!      WRITE(93,101)TIME,(W(ITR(N),JTR(N),KTR(N)),N=1,NTEST)
-!      WRITE(94,101)TIME,(P(ITR(N),JTR(N),KTR(N)),N=1,NTEST)
-      IF (NTEST2.NE.0) THEN
-      WRITE(81,101)TIME,(0.5*(U(ITR2(N),JTR2(N),KTR2(N))
-     &                       +U(ITR2(N)+1,JTR2(N),KTR2(N))),N=1,NTEST2)
-      WRITE(82,101)TIME,(0.5*(V(ITR2(N),JTR2(N),KTR2(N))
-     &                       +V(ITR2(N),JTR2(N)+1,KTR2(N))),N=1,NTEST2)
-      WRITE(83,101)TIME,(0.5*(W(ITR2(N),JTR2(N),KTR2(N))
-     &                    +W(ITR2(N),JTR2(N),KPV(KTR2(N)))),N=1,NTEST2)
-      WRITE(84,101)TIME,(P(ITR2(N),JTR2(N),KTR2(N)),N=1,NTEST2)
-      ENDIF
-  101 FORMAT(F15.7,10000ES15.7)
-
-      RETURN
-      END
-
-C*******************************************************************
-      SUBROUTINE RK3COEF
-C*******************************************************************
-      USE FLOW_VAR
-
-      GAMMA(1)=8./15.
-      GAMMA(2)=5./12.
-      GAMMA(3)=3./4.
-      RO(1)=0.
-      RO(2)=-17./60.
-      RO(3)=-5./12.
-
-      RETURN
-      END
-
-C******************************************************************
-      SUBROUTINE CFL(IMPL,CFLM,U,V,W)
-C******************************************************************
-C     CALCULATE THE MAXIMUM CFL NUMBER OF FLOW FIELD
-      USE FLOW_VAR
-
-      USE PARAM_VAR
-      USE FLOW_GEOM_VAR
       
-      IMPLICIT NONE
+       U_MAX=0D0
+       E_SUM=0D0
+       VOL  =0D0
+       U_BUB_AVG=0D0
+       VOL_BUB  =0D0
+!$OMP PARALLEL DO private(I,J,DVOL,DEN_CN,UU,VV,WW,VEL_KIM)
+!$OMP&reduction(MAX:U_MAX)
+!$OMP&reduction(+:E_SUM,VOL,U_BUB_AVG,VOL_BUB)
+      DO K=1,N3M
+      DO J=1,N2M
+      DO I=1,N1M
+        IF (FUNCBODY(XP(I),YP(J),ZP(K)) .GT. 0D0) THEN
+           DVOL=SDX(I)*SDY(J)*SDZ(K)
+           DEN_CN=DENM+DEN_DIFF*PSI_CN(I,J,K)
+           UU=0.5D0*(U(I,J,K)+U(IPV(I),J,K))
+           VV=0.5D0*(V(I,J,K)+V(I,JPV(J),K))
+           WW=0.5D0*(W(I,J,k)+W(I,J,KPV(K)))
+           VEL_KIM=UU**2D0+VV**2D0+WW**2D0
+           
+           U_MAX=DMAX1(U_MAX,DSQRT(VEL_KIM))
+           E_SUM=E_SUM+0.5D0*DEN_CN*VEL_KIM*DVOL
+           VOL=VOL+DVOL
+           
+           !BUBBLE_BULK_VELOCITY
+           U_BUB_AVG=U_BUB_AVG+W(I,J,K)*DVOL*(1.-PSI_CN(I,J,K)) 
+           VOL_BUB=VOL_BUB+DVOL*(1.-PSI_CN(I,J,K))
+        ENDIF
+      ENDDO
+      ENDDO
+      ENDDO
+         E_AVG=E_SUM/VOL
+         IF(VOL_BUB.NE.0.) U_BUB_AVG=U_BUB_AVG/VOL_BUB
+         write(*,966) TIME,U_MAX,E_AVG
+ 966  FORMAT ('time',f10.5,' u_max',es10.3,' e_avg',es10.3)
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      OPEN(923,FILE='0VEL,ENER.DAT',POSITION='APPEND')
+      WRITE(923,924) TIME,U_MAX,U_BUB_AVG,E_AVG !TIME IS N TIME, NOT N+1 TIME. 
+ 924  FORMAT(4ES15.5)                           !SO I USE PSI_CN(I,J,K)
+      CLOSE(923)
 
-      INTEGER IMPL
-      REAL CFLM
       
-      INTEGER I,J,K
-      REAL CFLI1,CFLI2,CFLI3,CFLI
-
-      CFLM=0.
-
-       IF ( N3M .EQ. 1 ) THEN
-!$OMP PARALLEL DO private(I,CFLI1,CFLI2,CFLI)
-!$OMP&reduction(MAX:CFLM)
-      DO 12 J=1,N2M
-      DO 12 I=1,N1M
-        CFLI1=ABS(U(I,J,1)+U(IPV(I),J,1))*SSDX(I)
-        CFLI2=ABS(V(I,J,1)+V(I,JPV(J),1))*SSDY(J)
-        CFLI=0.5*(CFLI1+CFLI2)*DT
-        CFLM=MAX(CFLI,CFLM)
- 12    CONTINUE
-          WRITE(*,*) '2D CFL IS CAL.'
-
-        ELSE
-!$OMP PARALLEL DO private(I,J,CFLI1,CFLI2,CFLI3,CFLI)
-!$OMP&reduction(MAX:CFLM)
-      DO 13 K=1,N3M
-      DO 13 J=1,N2M
-      DO 13 I=1,N1M
-         CFLI1=ABS(U(I,J,K)+U(IPV(I),J,K))*SSDX(I)
-         CFLI2=ABS(V(I,J,K)+V(I,JPV(J),K))*SSDY(J)
-         CFLI3=ABS(W(I,J,K)+W(I,J,KPV(K)))*SSDZ(K)
-         CFLI=0.5*(CFLI1+CFLI2+CFLI3)*DT
-         CFLM=MAX(CFLI,CFLM)
-!         IF (CFLI .GE. CFLM) THEN
-!              write(*,*) i,j,k,cflm
-!         ENDIF
-   13 CONTINUE
-       ENDIF
-
       RETURN
       END
-
-C*******************************************************************
+      
+!*******************************************************************
       SUBROUTINE MAKEFLD(IHIST,NTII,U,V,W,P)
-C*******************************************************************
+!*******************************************************************
       USE FLOW_VAR
       USE TWO_PHASE_PROPERTY
 
@@ -1505,36 +1066,116 @@ C*******************************************************************
       USE FLOW_GEOM_VAR
       
       USE HEAT_VAR
-      
+
       IMPLICIT NONE
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL P(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 P(0:M1,0:M2,0:M3)
       
-      INTEGER IHIST,NTII      
+      INTEGER*8 IHIST,NTII      
+     
+      INTEGER*8 I,J,K,ICHANNEL,IDUM
+      REAL*8 PI,RCOEF,RE_WATER,MFD_TURB,UMAX,RR,Y_PLUS,W1,W2
+      REAL*8 u2,v2
+      REAL*8 RAN1,RAN_NUM1,EVMM,EVM,EVM_DIVIDE
+      REAL*8 FUNCBODY,PBODY,ASSIGN_LVS
+      REAL*8 UU,VV,WW,U_BULK
+      REAL*8 VOL,DVOL
+      REAL*8 DTDX,COEF,AA,BB,CC
       
-      INTEGER I,J,K,ICHANNEL
-      REAL PI,RCOEF,RE_WATER,EPS_PTR,MFD_TURB,UMAX,RR,Y_PLUS,W1,W2
-      REAL RAN1,RAN_NUM1,IDUM,EVMM,EVM,EVM_DIVIDE
-      REAL FUNCBODY,PBODY
-      REAL UU,VV,WW,U_BULK
-      REAL VOL,DVOL
-      REAL DTDX,COEF,AA,BB,CC
+      real*8 xc,sigma1
+      integer*8 N
+      
+      real*8 xzero
 
+       INTEGER*8 LLVS
       PI=ACOS(-1.)
 
-        U=0.
-        V=0.
-        W=0.
-
+        U=0D0
+        V=0D0
+        W=0D0
+        
+        W2=0D0
+        u2=0D0
+        v2=0D0
         IHIST=0
         NTII=0
-        TIME=0.
-
-C-----INITIAL FIELD OPTION--------C
+        TIME=0D0
+        ! DO K=1,N3M
+      ! DO J=1,N2M
+      ! DO I=IBG,N1M
+        ! PBODY=ASSIGN_LVS(X(I),YP(J),ZP(K),XL,YL,ZL,1,PI)
+       ! IF ( PBODY .GE. 0. ) THEN
+            ! U(I,J,K)=0.5
+       ! ENDIF
+      ! ENDDO
+      ! ENDDO
+      ! ENDDO
+      
+      ! DO K=1,N3M
+      ! DO J=1,N2M
+      ! DO I=IBG,N1M
+        ! PBODY=ASSIGN_LVS(X(I),YP(J),ZP(K),XL,YL,ZL,2,PI)
+       ! IF ( PBODY .GE. 0. )  THEN
+            ! U(I,J,K)=-0.5
+       ! ENDIF
+      ! ENDDO
+      ! ENDDO
+      ! ENDDO
+       ! DO K=1,N3M
+       ! DO J=1,N2M
+       ! DO I=IBG,N1M
+        ! W2=0.
+        ! u2=0.
+        ! v2=0.
+       ! IF ((XP(I) .LE. 0) .AND. (Z(K).LE.0)) THEN 
+       ! W2=1.
+       ! u2=0.!0.
+       ! v2=0.!0.
+       ! LLVS=1
+       ! elseIF ((XP(I) .LE. 0) .AND. (Z(K).gt.0)) THEN 
+       ! W2=-1.
+       ! u2=0.!0.
+       ! v2=0.!0.
+       ! LLVS=2
+       ! ELSEIF ((XP(I) .GT. 0) .AND. (z(k).le.0)) THEN
+       ! W2=-1.
+       ! u2=0.5!0.
+       ! v2=0.5!0.
+       ! LLVS=3
+       ! ELSEIF ((XP(I) .GT. 0) .AND. (z(k).gt.0)) THEN
+       ! W2=1.
+       ! u2=-0.5!0.
+       ! v2=-0.5!0.
+       ! LLVS=3
+       ! ENDIF
+       
+         ! PBODY=ASSIGN_LVS(XP(I),YP(J),Z(K),XL,YL,ZL,LLVS,PI)
+        ! IF ( PBODY .LE. 0. ) THEN
+             ! W(I,J,K)=W2
+             ! u(i,j,k)=u2
+             ! v(i,j,k)=v2
+        ! ENDIF
+       ! ENDDO
+       ! ENDDO
+       ! ENDDO
+       ! W2=0.
+!      DO K=1,N3M
+!      DO J=1,N2M
+!      DO I=IBG,N1M
+!        PBODY=ASSIGN_LVS(X(I),YP(J),ZP(K),XL,YL,ZL,1,PI)
+!       IF ( PBODY .GE. 0. )  THEN
+!            U(I,J,K)=-1.
+!       ENDIF
+!      ENDDO
+!      ENDDO
+!      ENDDO
+       
+       
+!C-----INITIAL FIELD OPTION--------C
       RCOEF=(2./YL)**2   !for the case that pipe_radius is not 0.5
       RE_WATER=RE_AIR*DENR/VISR
-      EPS_PTR=1.
+      ! EPS_PTR=1.
       MFD_TURB=0 !0:LAMINAR PROFILE, 1:TURBULENT PROFILE
 
 !      ICHANNEL=0
@@ -1553,7 +1194,7 @@ C-----INITIAL FIELD OPTION--------C
 !     HOWEVER, PERIODICITY WILL BE SATISFIED IN 1 TIME STEP MARCHING
 
 !     U: LAMINAR PROFILE + PERTURBATION
-c!$OMP PARALLEL DO private(I,J,PBODY,RAN_NUM1,RR,UU,Y_PLUS,W1,W2) !no_omp for random_number_generation
+!!$OMP PARALLEL DO private(I,J,PBODY,RAN_NUM1,RR,UU,Y_PLUS,W1,W2) !no_omp for random_number_generation
       DO K=1,N3M
       DO J=1,N2M
       DO I=IBG,N1M
@@ -1590,26 +1231,26 @@ c!$OMP PARALLEL DO private(I,J,PBODY,RAN_NUM1,RR,UU,Y_PLUS,W1,W2) !no_omp for ra
       ENDDO
 !$OMP PARALLEL DO private(I,J,EVM,EVM_DIVIDE,EVMM)
       DO K=1,N3M
-      EVM=0.
-      EVM_DIVIDE=0.
+      EVM=0D0
+      EVM_DIVIDE=0D0
       DO J=1,N2M
       DO I=IBG,N1M
-       IF ( FUNCBODY(X(I),YP(J),ZP(K)) .GT. 0. ) THEN
+       IF ( FUNCBODY(X(I),YP(J),ZP(K)) .GT. 0D0 ) THEN
       EVM=EVM+U(I,J,K)*SDX(I)*SDY(J)
       EVM_DIVIDE=EVM_DIVIDE+SDX(I)*SDY(J)
        ENDIF
       ENDDO
       ENDDO
 
-      IF (EVM .EQ. 0.) THEN
-       EVMM=0.
+      IF (EVM .EQ. 0D0) THEN
+       EVMM=0D0
       ELSE
        EVMM=EVM/EVM_DIVIDE !/YL/ZL
       ENDIF
 
       DO J=1,N2M
       DO I=IBG,N1M
-       IF ( FUNCBODY(X(I),YP(J),ZP(K)) .GT. 0. ) THEN
+       IF ( FUNCBODY(X(I),YP(J),ZP(K)) .GT. 0D0 ) THEN
       U(I,J,K)=UMAX*( U(I,J,K)-EVMM )
        ENDIF
       ENDDO
@@ -1617,12 +1258,12 @@ c!$OMP PARALLEL DO private(I,J,PBODY,RAN_NUM1,RR,UU,Y_PLUS,W1,W2) !no_omp for ra
       ENDDO
 
 !     V: LAMINAR PROFILE + PERTURBATION
-c!$OMP PARALLEL DO private(I,J,PBODY,RAN_NUM1,RR,UU,Y_PLUS,W1,W2) !no_omp for random_number_generation
+!!$OMP PARALLEL DO private(I,J,PBODY,RAN_NUM1,RR,UU,Y_PLUS,W1,W2) !no_omp for random_number_generation
       DO K=1,N3M
       DO J=JBG,N2M
       DO I=1,N1M
         PBODY=FUNCBODY(XP(I),Y(J),ZP(K))
-       IF ( PBODY .GT. 0. ) THEN
+       IF ( PBODY .GT. 0D0 ) THEN
       RAN_NUM1=2.*RAN1(IDUM)-1.
        IF (MFD_TURB .EQ. 0) THEN
        	IF (ICHANNEL .EQ. 1) THEN
@@ -1635,7 +1276,7 @@ c!$OMP PARALLEL DO private(I,J,PBODY,RAN_NUM1,RR,UU,Y_PLUS,W1,W2) !no_omp for ra
          Y_PLUS=PBODY*RE_WATER
         IF (Y_PLUS .LE. 1.) THEN
            UU=Y_PLUS            !LAW OF WALL
-        ELSE IF (Y_PLUS .GE. 80.) THEN
+        ELSE IF (Y_PLUS .GE. 80D0) THEN
            UU=2.5*LOG(Y_PLUS)+5.5      !LOG LAW(KIM ET AL. 1987)
         ELSE !BUFFER LAYER
           W1=Y_PLUS                 
@@ -1654,26 +1295,26 @@ c!$OMP PARALLEL DO private(I,J,PBODY,RAN_NUM1,RR,UU,Y_PLUS,W1,W2) !no_omp for ra
       ENDDO
 !$OMP PARALLEL DO private(I,J,EVM,EVM_DIVIDE,EVMM)
       DO K=1,N3M
-      EVM=0.
-      EVM_DIVIDE=0.
+      EVM=0D0
+      EVM_DIVIDE=0D0
       DO J=JBG,N2M
       DO I=1,N1M
-       IF ( FUNCBODY(XP(I),Y(J),ZP(K)) .GT. 0. ) THEN
+       IF ( FUNCBODY(XP(I),Y(J),ZP(K)) .GT. 0D0 ) THEN
       EVM=EVM+V(I,J,K)*SDX(I)*SDY(J)
       EVM_DIVIDE=EVM_DIVIDE+SDX(I)*SDY(J)
        ENDIF
       ENDDO
       ENDDO
       
-      IF (EVM .EQ. 0.) THEN
-       EVMM=0.
+      IF (EVM .EQ. 0D0) THEN
+       EVMM=0D0
       ELSE
        EVMM=EVM/EVM_DIVIDE !/YL/ZL
       ENDIF
 
       DO J=JBG,N2M
       DO I=1,N1M
-       IF ( FUNCBODY(XP(I),Y(J),ZP(K)) .GT. 0. ) THEN
+       IF ( FUNCBODY(XP(I),Y(J),ZP(K)) .GT. 0D0 ) THEN
       V(I,J,K)=UMAX*( V(I,J,K)-EVMM )
        ENDIF
       ENDDO
@@ -1686,7 +1327,7 @@ c!$OMP PARALLEL DO private(I,J,PBODY,RAN_NUM1,RR,UU,Y_PLUS,W1,W2) !no_omp for ra
       DO J=1,N2M
       DO I=1,N1M
         PBODY=FUNCBODY(XP(I),YP(J),Z(K))
-       IF ( PBODY .GT. 0. ) THEN
+       IF ( PBODY .GT. 0D0 ) THEN
       RAN_NUM1=2.*RAN1(IDUM)-1.
        IF (MFD_TURB .EQ. 0) THEN
        	IF (ICHANNEL .EQ. 1) THEN
@@ -1699,7 +1340,7 @@ c!$OMP PARALLEL DO private(I,J,PBODY,RAN_NUM1,RR,UU,Y_PLUS,W1,W2) !no_omp for ra
          Y_PLUS=PBODY*RE_WATER
         IF (Y_PLUS .LE. 1.) THEN
            UU=Y_PLUS            !LAW OF WALL
-        ELSE IF (Y_PLUS .GE. 80.) THEN
+        ELSE IF (Y_PLUS .GE. 80D0) THEN
            UU=2.5*LOG(Y_PLUS)+5.5      !LOG LAW(KIM ET AL. 1987)
         ELSE !BUFFER LAYER
           W1=Y_PLUS                 
@@ -1719,19 +1360,19 @@ c!$OMP PARALLEL DO private(I,J,PBODY,RAN_NUM1,RR,UU,Y_PLUS,W1,W2) !no_omp for ra
 !$OMP PARALLEL DO private(I,J,EVM,EVM_DIVIDE,EVMM)
 !$OMP&private(PBODY,RR,UU,Y_PLUS,W1,W2)
       DO K=KBG,N3M
-      EVM=0.
-      EVM_DIVIDE=0.
+      EVM=0D0
+      EVM_DIVIDE=0D0
       DO J=1,N2M
       DO I=1,N1M
-       IF ( FUNCBODY(XP(I),YP(J),Z(K)) .GT. 0. ) THEN
+       IF ( FUNCBODY(XP(I),YP(J),Z(K)) .GT. 0D0 ) THEN
       EVM=EVM+W(I,J,K)*SDX(I)*SDY(J)
       EVM_DIVIDE=EVM_DIVIDE+SDX(I)*SDY(J)
        ENDIF
       ENDDO
       ENDDO
 
-      IF (EVM .EQ. 0.) THEN
-       EVMM=0.
+      IF (EVM .EQ. 0D0) THEN
+       EVMM=0D0
       ELSE
        EVMM=EVM/EVM_DIVIDE !/YL/ZL
       ENDIF
@@ -1739,7 +1380,7 @@ c!$OMP PARALLEL DO private(I,J,PBODY,RAN_NUM1,RR,UU,Y_PLUS,W1,W2) !no_omp for ra
       DO J=1,N2M
       DO I=1,N1M
         PBODY=FUNCBODY(XP(I),YP(J),Z(K))
-       IF ( PBODY .GT. 0. ) THEN
+       IF ( PBODY .GT. 0D0 ) THEN
        IF (MFD_TURB .EQ. 0) THEN
        	IF (ICHANNEL .EQ. 1) THEN
         RR=YP(J)**2
@@ -1751,7 +1392,7 @@ c!$OMP PARALLEL DO private(I,J,PBODY,RAN_NUM1,RR,UU,Y_PLUS,W1,W2) !no_omp for ra
          Y_PLUS=PBODY*RE_WATER
         IF (Y_PLUS .LE. 1.) THEN
            UU=Y_PLUS            !LAW OF WALL
-        ELSE IF (Y_PLUS .GE. 80.) THEN
+        ELSE IF (Y_PLUS .GE. 80D0) THEN
            UU=2.5*LOG(Y_PLUS)+5.5      !LOG LAW(KIM ET AL. 1987)
         ELSE !BUFFER LAYER
           W1=Y_PLUS                 
@@ -1770,14 +1411,14 @@ c!$OMP PARALLEL DO private(I,J,PBODY,RAN_NUM1,RR,UU,Y_PLUS,W1,W2) !no_omp for ra
       ENDDO
 
 c-----velocity scaling to make bulk_velocity=1
-       WW=0.
-       VOL=0.
+       WW=0D0
+       VOL=0D0
 !$OMP PARALLEL DO private(I,J,DVOL)
 !$OMP&reduction(+:WW,VOL)
       DO K=1,N3M
       DO J=1,N2M
       DO I=1,N1M
-       IF ( FUNCBODY(XP(I),YP(J),Z(K)) .GT. 0. ) THEN
+       IF ( FUNCBODY(XP(I),YP(J),Z(K)) .GT. 0D0 ) THEN
          DVOL=SDX(I)*SDY(J)*VDZ(K)
          WW=WW+W(I,J,K)*DVOL
          VOL=VOL+DVOL
@@ -1786,7 +1427,7 @@ c-----velocity scaling to make bulk_velocity=1
       ENDDO
       ENDDO
        WW=WW/VOL
-       IF (WW .EQ. 0.) THEN
+       IF (WW .EQ. 0D0) THEN
        	WRITE(*,*) 'ZERO INITIAL STREAMWISE VELOCITY'
        	GOTO 100
        ENDIF
@@ -1801,14 +1442,14 @@ c-----velocity scaling to make bulk_velocity=1
       ENDDO
       ENDDO
 
-       WW=0.
-       VOL=0.
+       WW=0D0
+       VOL=0D0
 !$OMP PARALLEL DO private(I,J,DVOL)
 !$OMP&reduction(+:WW,VOL)
       DO K=1,N3M
       DO J=1,N2M
       DO I=1,N1M
-       IF ( FUNCBODY(XP(I),YP(J),Z(K)) .GT. 0. ) THEN
+       IF ( FUNCBODY(XP(I),YP(J),Z(K)) .GT. 0D0 ) THEN
          DVOL=SDX(I)*SDY(J)*VDZ(K)
          WW=WW+W(I,J,K)*DVOL
          VOL=VOL+DVOL
@@ -1821,7 +1462,7 @@ c-----velocity scaling to make bulk_velocity=1
        WRITE(*,*) 'BULK_VELOCITY(after_scaling)=',WW
 
  100   CONTINUE
-c-----velocity scaling to make bulk_velocity=1
+!c-----velocity scaling to make bulk_velocity=1
 
 !BOUNDARY_CONDITION
         IF (IPX .EQ. 0) THEN
@@ -1868,7 +1509,7 @@ c-----velocity scaling to make bulk_velocity=1
         DO K=1,N3M
         DO J=1,N2M
         DO I=1,N1M
-         P(I,J,K)=0.  
+         P(I,J,K)=0D0  
         ENDDO
         ENDDO
         ENDDO
@@ -1878,59 +1519,67 @@ c-----velocity scaling to make bulk_velocity=1
         WRITE(*,*) 'INITIAL FIELD (U,V,W, AND P) IS MADE'
         WRITE(*,*)' '
 
-C=====SAVE
-       K=1
-      !POSITION IS A LITTLE DIFFERENT FOR CONVINIENCE
-       OPEN(146,FILE='0INITIAL_VEL_2D.DAT')
-      IF (IPS .EQ. 0) THEN
-       WRITE(146,*) 'VARIABLES="X","Y","U","V","W"'
-      WRITE(146,*) 'ZONE I=',N1M,',J=',N2M,',F=POINT'
-      DO J=1,N2M
-      DO I=1,N1M
-         UU=0.5*(U(I,J,K)+U(IPV(I),J,K))
-         VV=0.5*(V(I,J,K)+V(I,JPV(J),K))
-         WW=0.5*(W(I,J,K)+W(I,J,KPV(K)))
-          WRITE(146,147) XP(I),YP(J),UU,VV,WW
-      ENDDO
-      ENDDO
-      ELSE IF (IPS .EQ. 1) THEN
-       WRITE(146,*) 'VARIABLES="X","Y","U","V","W","T"'
-      WRITE(146,*) 'ZONE I=',N1M,',J=',N2M,',F=POINT'
-      DO J=1,N2M
-      DO I=1,N1M
-         UU=0.5*(U(I,J,K)+U(IPV(I),J,K))
-         VV=0.5*(V(I,J,K)+V(I,JPV(J),K))
-         WW=0.5*(W(I,J,K)+W(I,J,KPV(K)))
-          WRITE(146,147) XP(I),YP(J),UU,VV,WW,T(I,J,K)
-      ENDDO
-      ENDDO
-      ENDIF !IF (IPS .EQ. 0) THEN
-       CLOSE(146)
- 147  FORMAT(6F15.8)
- 
- 
-!       OPEN(146,FILE='0INITIAL_VEL.DAT')
-!       WRITE(146,*) 'VARIABLES="X","Y","Z","U","V","W"'
-!      WRITE(146,*) 'ZONE I=',N1M,',J=',N2M,',K=',N3M,',F=POINT'
-!      DO K=1,N3M
+!C=====SAVE
+!       K=1
+!      !POSITION IS A LITTLE DIFFERENT FOR CONVINIENCE
+!       OPEN(146,FILE='0INITIAL_VEL_2D.DAT')
+!      IF (IPS .EQ. 0) THEN
+!       WRITE(146,*) 'VARIABLES="X","Y","U","V","W"'
+!      WRITE(146,*) 'ZONE I=',N1M,',J=',N2M,',F=POINT'
 !      DO J=1,N2M
 !      DO I=1,N1M
 !         UU=0.5*(U(I,J,K)+U(IPV(I),J,K))
 !         VV=0.5*(V(I,J,K)+V(I,JPV(J),K))
 !         WW=0.5*(W(I,J,K)+W(I,J,KPV(K)))
-!        WRITE(146,147) XP(I),YP(J),ZP(K),UU,VV,WW
+!          WRITE(146,147) XP(I),YP(J),UU,VV,WW
 !      ENDDO
 !      ENDDO
+!      ELSE IF (IPS .EQ. 1) THEN
+!       WRITE(146,*) 'VARIABLES="X","Y","U","V","W","T"'
+!      WRITE(146,*) 'ZONE I=',N1M,',J=',N2M,',F=POINT'
+!      DO J=1,N2M
+!      DO I=1,N1M
+!         UU=0.5*(U(I,J,K)+U(IPV(I),J,K))
+!         VV=0.5*(V(I,J,K)+V(I,JPV(J),K))
+!         WW=0.5*(W(I,J,K)+W(I,J,KPV(K)))
+!          WRITE(146,147) XP(I),YP(J),UU,VV,WW,T(I,J,K)
 !      ENDDO
+!      ENDDO
+!      ENDIF !IF (IPS .EQ. 0) THEN
 !       CLOSE(146)
-! 147  FORMAT(6F15.8)
+! !147  FORMAT(6F15.8)
+ 
+        OPEN(146,FILE='0INITIAL_VEL.DAT')
+       IF (IPS .EQ. 0) THEN
+        WRITE(146,*) 'VARIABLES="X","Y","Z","U","V","W"'
+       ELSE
+        WRITE(146,*) 'VARIABLES="X","Y","Z","U","V","W","T"'
+       ENDIF
+       WRITE(146,*) 'ZONE I=',N1M,',J=',N2M,',K=',N3M,',F=POINT'
+       DO K=1,N3M
+       DO J=1,N2M
+       DO I=1,N1M
+          UU=0.5D0*(U(I,J,K)+U(IPV(I),J,K))
+          VV=0.5D0*(V(I,J,K)+V(I,JPV(J),K))
+          WW=0.5D0*(W(I,J,K)+W(I,J,KPV(K)))
+         IF (IPS .EQ. 0) THEN
+         WRITE(146,147) XP(I),YP(J),ZP(K),UU,VV,WW
+         ELSE 
+         WRITE(146,148) XP(I),YP(J),ZP(K),UU,VV,WW,T(I,J,K)        
+         ENDIF
+       ENDDO
+       ENDDO
+       ENDDO
+        CLOSE(146)
+  147  FORMAT(6F15.8)
+  148  FORMAT(7F15.8)
+      
 
         RETURN
-        END
-        
-C*******************************************************************
+        END    
+!C*******************************************************************
       SUBROUTINE MAKEFLD_TEMP
-C*******************************************************************
+!C*******************************************************************
       USE FLOW_VAR
       USE TWO_PHASE_PROPERTY
 
@@ -1938,32 +1587,43 @@ C*******************************************************************
       USE FLOW_GEOM_VAR
 
       USE HEAT_VAR
-
+      
       IMPLICIT NONE
 
-      INTEGER I,J,K
-      REAL FUNCBODY,RR
-      REAL DTDX,U_BULK,COEF,AA,BB,CC
-
-       T=0.
-
-       DTDX=2.
-       U_BULK=1.
-       COEF=2.*U_BULK*(0.5*YL)**2/(TCM/DENSCM)*DTDX !NOMALIZED COEFFICIENT
-       AA=3./16.
-       BB=1./16.
-       CC=1./4.
+      INTEGER*8 I,J,K,IDUM
+      REAL*8 FUNCBODY,RR
+      REAL*8 DTDX,U_BULK,COEF,AA,BB,CC,RAN1,RAN_NUM1,EVM
+      real*8 pbody,ASSIGN_LVS,PI
+      real*8 sigma1,temp0,xc
+      integer*8 N
+      PI=ACOS(-1D0)
+       T=0D0
+      
+       DTDX=2D0
+       U_BULK=1D0
+       COEF=2.*U_BULK*(0.5D0*YL)**2/(TCM/DENSCM)*DTDX !NOMALIZED COEFFICIENT
+       AA=3D0/16D0
+       BB=1D0/16D0
+       CC=1D0/4D0
 
        DO K=1,N3M
        DO J=1,N2M
        DO I=1,N1M
-       	IF (FUNCBODY(XP(I),YP(J),ZP(K)) .GT. 0.) THEN
-       	 RR=SQRT(XP(I)**2+YP(J)**2)
-         T(I,J,K)=COEF*(AA+BB*RR**4-CC*RR**2)	
-        ENDIF
+       ! PBODY= ASSIGN_LVS(XP(I),YP(J),ZP(K),1,PI)
+       ! IF (PBODY .LT. 0D0) THEN 
+       ! T(I,J,K)=1D0
+       ! ELSE
+       ! T(I,J,K)=0D0
+       ! ENDIF       
+      	IF (FUNCBODY(XP(I),YP(J),ZP(K)) .GT. 0D0) THEN
+      	 RR=DSQRT(XP(I)**2+YP(J)**2)
+            T(I,J,K)=COEF*(AA+BB*RR**4-CC*RR**2)	
+           ENDIF
        ENDDO
        ENDDO
        ENDDO
+       
+        
 
 !      DO K=1,N3M
 !      DO I=1,N1M
@@ -1990,43 +1650,521 @@ C*******************************************************************
 !      ENDDO
 !      ENDDO
 !      ENDDO
-!
-!!     Z PERIODICITY
-!      IF (IPZ .EQ. 1) THEN
-!      DO J=1,N2M
-!      DO I=1,N1M
-!         T(I,J,0) =T(I,J,N3M)
-!         T(I,J,N3)=T(I,J,1)
-!      ENDDO
-!      ENDDO
-!      ENDIF
-!
-!!     X PERIODICITY
-!      IF (IPX .EQ. 1) THEN
-!      DO K=1,N3M
-!      DO J=1,N2M
-!         T(0 ,J,K)=T(N1M,J,K)
-!         T(N1,J,K)=T(1  ,J,K)
-!      ENDDO
-!      ENDDO
-!      ENDIF
+
+!     Z PERIODICITY
+      IF (IPZ .EQ. 1) THEN
+      DO J=1,N2M
+      DO I=1,N1M
+         T(I,J,0) =T(I,J,N3M)
+         T(I,J,N3)=T(I,J,1)
+      ENDDO
+      ENDDO
+      ENDIF
+
+!     X PERIODICITY
+      IF (IPX .EQ. 1) THEN
+      DO K=1,N3M
+      DO J=1,N2M
+         T(0 ,J,K)=T(N1M,J,K)
+         T(N1,J,K)=T(1  ,J,K)
+      ENDDO
+      ENDDO
+      ENDIF
 
         RETURN
         END
         
-        
-C------------------------------------------------
-C RANDOM NUMBER GENERATOR
+ 
+!*******************************************************************
+      SUBROUTINE PREFLD(IHIST,fileprevel,U,V,W,P,
+     & VOL_TOT_ORI,QVOL_ORI)
+!*******************************************************************
+      USE FLOW_VAR
+      USE TWO_PHASE_PROPERTY
+
+      USE PARAM_VAR
+      USE FLOW_GEOM_VAR
+
+      USE LVS_VAR
+      USE LVS_GEOM_VAR
+
+      USE HEAT_VAR
+
+      IMPLICIT NONE
+      INTEGER*8   I,J,K,N,NN,LLVS
+      REAL*8      DT_O,PRAA,ALPHI_TMP
+      INTEGER*8   IPSS,IIPX,IIPY,IIPZ
+      
+      CHARACTER*30 fileprevel
+
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 P(0:M1,0:M2,0:M3)
+
+      REAL*8 VOL_TOT_ORI(MLVS)
+      
+      REAL*8 QVOL_ORI
+
+      INTEGER*8 LVS,LVS2
+      INTEGER*8 ihist
+      
+!     dum for future use
+      READ(12,1001) N1,N2,N3
+      READ(12,1002) IHIST,M,TIME,DT_O
+      READ(12,1003) IPSS,IIPX,IIPY,IIPZ,PRAA
+      READ(12,1004) QVOL_ORI
+      READ(12,1005) ((( U(I,J,K) ,I=1,N1),J=0,N2),K=0,N3)
+      READ(12,1005) ((( V(I,J,K) ,I=0,N1),J=1,N2),K=0,N3)
+      READ(12,1005) ((( W(I,J,K) ,I=0,N1),J=0,N2),K=1,N3)
+      READ(12,1005) ((( P(I,J,K) ,I=1,N1M),J=1,N2M),K=1,N3M)
+
+      !LVS
+      READ(12,1011) N1F,N2F,N3F
+      READ(12,1012) DENR,VISR,FR,SURF_J,FK,RE_AIR
+
+      READ(12,1013) NLVS,N_MAX
+      READ(12,1014) (VOL_TOT_ORI(LLVS), LLVS=1,NLVS)
+      READ(12,1015) ((NUMA(N,LLVS) ,N=1,N_MAX),LLVS=1,NLVS)
+      DO LLVS=1,NLVS
+       DO N=1,N_MAX
+        DO NN=1,NUMA(N,LLVS)
+        READ(12,1016) I,J,K,ALPHI_TMP
+         I_B(NN,N,LLVS)=I
+         J_B(NN,N,LLVS)=J
+         K_B(NN,N,LLVS)=K
+         ALPHI(NN,N,LLVS)=ALPHI_TMP
+        ENDDO
+       ENDDO
+      ENDDO
+      
+            
+      IF (IPS.EQ.1) THEN
+      IF (IPSS.EQ.0) THEN
+       CALL MAKEFLD_TEMP
+      ELSE IF (IPSS.EQ.1) THEN
+       READ(12,1006) PRM,SCR,TCR
+       READ(12,1005) ((( T(I,J,K) ,I=0,N1),J=0,N2),K=0,N3)
+      ENDIF
+      ENDIF
+
+ 1001   FORMAT(3I8)
+ 1002   FORMAT(2I8,2ES20.12)
+ 1003   FORMAT(4I8,1ES20.12)
+ 1004   FORMAT(1ES20.12)
+ 1005   FORMAT(5ES20.12)
+ 1006   FORMAT(3ES20.12)
+ 1007   FORMAT(4I8)
+ 
+ 1011   FORMAT(3I8)
+ 1012   FORMAT(6ES20.12)
+ 1013   FORMAT(2I8)
+ 1014   FORMAT(8ES20.12)
+ 1015   FORMAT(8I8)
+ 1016   FORMAT(3I8,1ES20.12)
+
+
+      IF (IPZERO .EQ. 1) P=0D0
+
+      WRITE(*,*)' '
+      WRITE(*,100)
+      WRITE(*,101)
+      WRITE(*,102) fileprevel
+      WRITE(*,104) N1,N2,N3
+      WRITE(*,105) IHIST,M,TIME,DT_O
+      WRITE(*,106) IPSS,PRAA
+
+  100 FORMAT('----------- INITIAL FIELD INFORMATION -----------')
+  101 FORMAT('INITIAL FIELD      : READING DONE')
+  102 FORMAT('INITIAL FIELD NAME : ',A30)
+  104 FORMAT('N1=',I12,'  N2=',I12,'  N3=',I12)
+  105 FORMAT('IHIST=',I9,'  M=',I13,'  TIME=',F10.5,'  DT=',F12.8)
+  106 FORMAT('IPS=',I11,'  PRA=',F11.3)
+
+       IF (IDTOLD .EQ. 1) THEN
+        DT=DT_O
+        WRITE(*,*) 'DT_OLD IS USED'
+       ELSE
+        WRITE(*,*) 'DT_NEW IS USED'
+       ENDIF
+
+      DO LLVS=1,NLVS
+       NUMA_MAX=0
+       DO N=1,N_MAX
+         NUMA_MAX=MAX(NUMA_MAX,NUMA(N,LLVS))
+       ENDDO
+        WRITE(*,*) 'NUMA_MAX/MF_BAND=',FLOAT(NUMA_MAX)/FLOAT(MF_BAND)
+      ENDDO
+
+      
+      RETURN
+      END
+
+!C*******************************************************************
+      SUBROUTINE WRITEFIELD(NV,IHIST,U,V,W,P,VOL_TOT_ORI,QVOL_ORI)
+!C*******************************************************************
+      USE FLOW_VAR
+      USE TWO_PHASE_PROPERTY
+
+      USE PARAM_VAR
+      USE FLOW_GEOM_VAR
+
+      USE LVS_VAR
+      USE LVS_GEOM_VAR
+
+      USE HEAT_VAR
+      
+      USE IBM_VAR
+      
+      IMPLICIT NONE
+
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 P(0:M1,0:M2,0:M3)
+
+      REAL*8 VOL_TOT_ORI(MLVS)
+      REAL*8 QVOL_ORI
+      
+      INTEGER*8 NV,IHIST
+      
+      INTEGER*8 IDUM
+      REAL*8 DUM
+      INTEGER*8 I,J,K,N,NN,LLVS,L,LVS,LVS2 ! LVS1,LVS2 ADDED 2017-09-03
+      CHARACTER*9 tname
+      CHARACTER*3 tfn1
+      INTEGER*8 IDG1,IDG2,IDG3,IDG4,IDG5,IDG6
+
+
+      idum=0
+      dum=0D0
+
+      tfn1='fld'
+      idg1=ihist/100000
+      idg2=(ihist-idg1*100000)/10000
+      idg3=(ihist-idg1*100000-idg2*10000)/1000
+      idg4=(ihist-idg1*100000-idg2*10000-idg3*1000)/100
+      idg5=(ihist-idg1*100000-idg2*10000-idg3*1000-idg4*100)/10
+      idg6=ihist-idg1*100000-idg2*10000-idg3*1000-idg4*100-idg5*10
+      tname=tfn1//char(idg1+48)//char(idg2+48)//
+     &      char(idg3+48)//char(idg4+48)//char(idg5+48)//char(idg6+48)
+
+      OPEN(NV,FILE=tname)
+!ccc      IVER=-2
+!ccc      WRITE(NV) IVER
+      WRITE(NV,1001) N1,N2,N3
+      WRITE(NV,1002) IHIST,M,TIME,DT
+      WRITE(NV,1003) IPS,IPX,IPY,IPZ,PRA
+      WRITE(NV,1004) QVOL_ORI
+      WRITE(NV,1005) ((( U(I,J,K) ,I=1,N1),J=0,N2),K=0,N3)
+      WRITE(NV,1005) ((( V(I,J,K) ,I=0,N1),J=1,N2),K=0,N3)
+      WRITE(NV,1005) ((( W(I,J,K) ,I=0,N1),J=0,N2),K=1,N3)
+      WRITE(NV,1005) ((( P(I,J,K) ,I=1,N1M),J=1,N2M),K=1,N3M)
+
+      !LVS
+      WRITE(NV,1011) N1F,N2F,N3F
+      WRITE(NV,1012) DENR,VISR,FR,SURF_J,FK,RE_AIR
+
+      WRITE(NV,1013) NLVS,N_MAX
+      ! do llvs=1,nlvs
+      ! WRITE(*,*)'vol_tot_ori=',VOL_TOT_ORI(LLVS)
+      ! enddo
+      WRITE(NV,1014) (VOL_TOT_ORI(LLVS), LLVS=1,NLVS)
+      WRITE(NV,1015) ((NUMA(N,LLVS) ,N=1,N_MAX),LLVS=1,NLVS)
+      DO LLVS=1,NLVS
+       DO N=1,N_MAX
+        DO NN=1,NUMA(N,LLVS)
+         I=I_B(NN,N,LLVS)
+         J=J_B(NN,N,LLVS)
+         K=K_B(NN,N,LLVS)
+        WRITE(NV,1016) I,J,K,ALPHI(NN,N,LLVS)
+        ENDDO
+       ENDDO
+      ENDDO
+      
+      IF (IPS.EQ.1) THEN
+      WRITE(NV,1006) PRM,SCR,TCR
+      WRITE(NV,1005) ((( T(I,J,K) ,I=0,N1),J=0,N2),K=0,N3)
+      ENDIF
+      CLOSE(NV)
+
+ 1001   FORMAT(3I8)
+ 1002   FORMAT(2I8,2ES20.12)
+ 1003   FORMAT(4I8,1ES20.12)
+ 1004   FORMAT(1ES20.12)
+ 1005   FORMAT(5ES20.12)
+ 1006   FORMAT(3ES20.12)
+ 1007   FORMAT(4I8)
+ 
+ 1011   FORMAT(3I8)
+ 1012   FORMAT(6ES20.12)
+ 1013   FORMAT(2I8)
+ 1014   FORMAT(8ES20.12)
+ 1015   FORMAT(8I8)
+ 1016   FORMAT(3I8,1ES20.12)
+
+      NV=NV+1
+
+      RETURN
+      END
+
+!C*******************************************************************
+      SUBROUTINE WRITEHISTORY(CFLM,DVMAX,QMMAX)
+!C*******************************************************************
+      USE PARAM_VAR
+      USE FLOW_GEOM_VAR
+      USE FLOW_VAR
+
+      IMPLICIT NONE
+
+      REAL*8 CFLM,DVMAX,QMMAX
+
+      WRITE(13,130) TIME,DT,CFLM,DVMAX,QMMAX
+ 130  FORMAT(F13.5,4ES15.7)
+
+      IF (ICH.NE.0) THEN
+      WRITE(96,140) TIME,PMI_DUDY,PMI
+ 140  FORMAT(F13.5,3ES20.12)
+      ENDIF
+
+      RETURN
+      END
+      
+!C*******************************************************************
+      SUBROUTINE WRITEHISTORY_HEAT(W,PSI_C)
+!C*******************************************************************
+      USE PARAM_VAR
+      USE FLOW_GEOM_VAR
+      USE FLOW_VAR
+
+      USE TWO_PHASE_PROPERTY
+      USE HEAT_VAR
+
+      IMPLICIT NONE
+
+      REAL*8 W(0:M1,0:M2,0:M3)
+      REAL*8 PSI_C(0:M1,0:M2,0:M3)
+
+      INTEGER*8 I,J,K
+      REAL*8 AA,UU,FUNCBODY,DVOL,UU_TMP,DENSCF,AMEAN_TEMP,ANUSSET
+
+!      PSAVG=0.
+!      DO J=1,N2M
+!      TMP=0.
+!      DO K=1,N3M
+!      DO I=1,N1M
+!      TMP=TMP+T(I,J,K)
+!      ENDDO
+!      ENDDO
+!      PSAVG=PSAVG+TMP*SDY(J)
+!      ENDDO
+!      PSAVG=PSAVG/2./FLOAT(N1M*N3M)
+!
+!      DPSDYW=0.
+!      DO K=1,N3M
+!      DO I=1,N1M
+!      DPSDYW=DPSDYW+T(I,1,K)-T(I,0,K)
+!      ENDDO
+!      ENDDO
+!      DPSDYW=DPSDYW/FLOAT(N1M*N3M)*VVDY(1)
+!
+!      WRITE(97,140)TIME,PSAVG,DPSDYW
+      
+      AA=0D0
+      UU=0D0
+!$OMP PARALLEL DO private(I,J,DVOL,UU_TMP,DENSCF)
+!$OMP&reduction(+:AA,UU)
+      DO K=1,N3M
+      DO J=1,N2M
+      DO I=1,N1M
+       	IF (FUNCBODY(XP(I),YP(J),ZP(K)) .GT. 0D0) THEN
+       	 DVOL=SDX(I)*SDY(J)*SDZ(K)
+
+         UU_TMP=0.5D0*(W(I,J,KPV(K))+W(I,J,K))
+         DENSCF=DENSCM+DENSC_DIFF*PSI_C(I,J,K)
+
+         AA=AA+DENSCF*UU_TMP*T(I,J,K)*DVOL
+         UU=UU+DENSCF*UU_TMP*DVOL
+        endif
+      ENDDO
+      ENDDO
+      ENDDO
+
+       IF (AA .NE. 0D0 .AND. UU.NE. 0D0) THEN
+        AMEAN_TEMP=AA/UU
+        ANUSSET=2./AMEAN_TEMP
+        WRITE(*,*) 'THETA_MEAN=',AMEAN_TEMP,'NUSSET=',ANUSSET
+       ELSE
+        AMEAN_TEMP=0D0
+        ANUSSET=0D0
+       ENDIF
+       
+      WRITE(97,140)TIME,ANUSSET,AMEAN_TEMP
+ 140  FORMAT(F13.5,3ES20.12)
+      
+
+      RETURN
+      END
+
+!C*******************************************************************
+      SUBROUTINE TRACEINIT(ITR,JTR,KTR,ITR2,JTR2,KTR2)
+!C*******************************************************************
+      USE PARAM_VAR
+      USE FLOW_GEOM_VAR
+      USE FLOW_VAR
+      
+      IMPLICIT NONE
+
+      INTEGER*8 ITR(10000),JTR(10000),KTR(10000)
+      INTEGER*8 ITR2(10000),JTR2(10000),KTR2(10000)
+      
+      INTEGER*8 N
+
+      DO 10 N=1,NTEST
+      READ(10,*) ITR(N),JTR(N),KTR(N)
+   10 CONTINUE
+      READ(10,*) NTEST2
+      IF (NTEST2.NE.0) THEN
+      DO 11 N=1,NTEST2
+      READ(10,*) ITR2(N),JTR2(N),KTR2(N)
+   11 CONTINUE
+      ENDIF
+
+      PRINT*, '===== TRACE POSITION ====='
+      DO 15 N=1,NTEST
+      WRITE(*,16) N,ITR(N),JTR(N),KTR(N),
+     &            XP(ITR(N)),YP(JTR(N)),ZP(KTR(N))
+   15 CONTINUE
+      IF (NTEST2.NE.0) THEN
+      PRINT*, '===== TRACE POSITION 2 ====='
+      DO 17 N=1,NTEST2
+      WRITE(*,16) N,ITR2(N),JTR2(N),KTR2(N),
+     &            XP(ITR2(N)),YP(JTR2(N)),ZP(KTR2(N))
+   17 CONTINUE
+      ENDIF
+   16 FORMAT(I5,3I6,3F12.5)
+
+      RETURN
+      END
+
+!C*******************************************************************
+      SUBROUTINE TRACER(U,V,W,P,ITR,JTR,KTR,ITR2,JTR2,KTR2)
+!C*******************************************************************
+      USE PARAM_VAR
+      USE FLOW_GEOM_VAR
+
+      USE FLOW_VAR
+      
+      IMPLICIT NONE
+      
+      INTEGER*8 N
+
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 P(0:M1,0:M2,0:M3)
+
+      INTEGER*8 ITR(10000),JTR(10000),KTR(10000)
+      INTEGER*8 ITR2(10000),JTR2(10000),KTR2(10000)
+
+      WRITE(91,101)TIME,(0.5*(U(ITR(N),JTR(N),KTR(N))
+     &                       +U(ITR(N)+1,JTR(N),KTR(N))),N=1,NTEST)
+      WRITE(92,101)TIME,(0.5*(V(ITR(N),JTR(N),KTR(N))
+     &                       +V(ITR(N),JTR(N)+1,KTR(N))),N=1,NTEST)
+      WRITE(93,101)TIME,(0.5*(W(ITR(N),JTR(N),KTR(N))
+     &                       +W(ITR(N),JTR(N),KPV(KTR(N)))),N=1,NTEST)
+      WRITE(94,101)TIME,(P(ITR(N),JTR(N),KTR(N)),N=1,NTEST)
+!      WRITE(91,101)TIME,(U(ITR(N),JTR(N),KTR(N)),N=1,NTEST)
+!      WRITE(92,101)TIME,(V(ITR(N),JTR(N),KTR(N)),N=1,NTEST)
+!      WRITE(93,101)TIME,(W(ITR(N),JTR(N),KTR(N)),N=1,NTEST)
+!      WRITE(94,101)TIME,(P(ITR(N),JTR(N),KTR(N)),N=1,NTEST)
+      IF (NTEST2.NE.0) THEN
+      WRITE(81,101)TIME,(0.5*(U(ITR2(N),JTR2(N),KTR2(N))
+     &                       +U(ITR2(N)+1,JTR2(N),KTR2(N))),N=1,NTEST2)
+      WRITE(82,101)TIME,(0.5*(V(ITR2(N),JTR2(N),KTR2(N))
+     &                       +V(ITR2(N),JTR2(N)+1,KTR2(N))),N=1,NTEST2)
+      WRITE(83,101)TIME,(0.5*(W(ITR2(N),JTR2(N),KTR2(N))
+     &                    +W(ITR2(N),JTR2(N),KPV(KTR2(N)))),N=1,NTEST2)
+      WRITE(84,101)TIME,(P(ITR2(N),JTR2(N),KTR2(N)),N=1,NTEST2)
+      ENDIF
+  101 FORMAT(F15.7,10000ES15.7)
+
+      RETURN
+      END
+
+!C*******************************************************************
+      SUBROUTINE RK3COEF
+!C*******************************************************************
+      USE FLOW_VAR
+
+      GAMMA(1)=8D0/15D0
+      GAMMA(2)=5D0/12D0
+      GAMMA(3)=3D0/4D0
+      RO(1)=0D0
+      RO(2)=-17D0/60D0
+      RO(3)=-5D0/12D0
+
+      RETURN
+      END
+
+!C******************************************************************
+      SUBROUTINE CFL(CFLM,U,V,W)
+!C******************************************************************
+!C     CALCULATE THE MAXIMUM CFL NUMBER OF FLOW FIELD
+      USE FLOW_VAR
+
+      USE PARAM_VAR
+      USE FLOW_GEOM_VAR
+      
+      IMPLICIT NONE
+
+      REAL*8      U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)          
+      REAL*8      CFLM,CFLI1,CFLI2,CFLI3,CFLI     
+      INTEGER*8   I,J,K
+
+
+      CFLM=0d0
+
+       IF ( N3M .EQ. 1 ) THEN
+!$OMP PARALLEL DO private(I,CFLI1,CFLI2,CFLI)
+!$OMP&reduction(MAX:CFLM)
+      DO 12 J=1,N2M
+      DO 12 I=1,N1M
+        CFLI1=DABS(U(I,J,1)+U(IPV(I),J,1))*SSDX(I)
+        CFLI2=DABS(V(I,J,1)+V(I,JPV(J),1))*SSDY(J)
+        CFLI=0.5d0*(CFLI1+CFLI2)*DT
+        CFLM=DMAX1(CFLI,CFLM)
+ 12    CONTINUE
+          WRITE(*,*) '2D CFL IS CAL.'
+
+        ELSE
+!$OMP PARALLEL DO private(I,J,CFLI1,CFLI2,CFLI3,CFLI)
+!$OMP&reduction(MAX:CFLM)
+      DO 13 K=1,N3M
+      DO 13 J=1,N2M
+      DO 13 I=1,N1M
+         CFLI1=DABS(U(I,J,K)+U(IPV(I),J,K))*SSDX(I)
+         CFLI2=DABS(V(I,J,K)+V(I,JPV(J),K))*SSDY(J)
+         CFLI3=DABS(W(I,J,K)+W(I,J,KPV(K)))*SSDZ(K)
+         CFLI=0.5*(CFLI1+CFLI2+CFLI3)*DT
+         CFLM=DMAX1(CFLI,CFLM)
+!         IF (CFLI .GE. CFLM) THEN
+!              write(*,*) i,j,k,cflm
+!         ENDIF
+   13 CONTINUE
+       ENDIF
+
+      RETURN
+      END
+       
+!C------------------------------------------------
+! RANDOM_NUMBER_GENERATOR
 
       FUNCTION RAN1(IDUM)
-      INTEGER IDUM,IA,IM,IQ,IR,NTAB,NDIV
-      REAL RAN1,AM,EPS,RNMX
+      
+      INTEGER*8    IDUM,IA,IM,IQ,IR,NTAB,NDIV
+      REAL*8       RAN1,AM,EPS,RNMX
       PARAMETER (IA=16807,IM=2147483647,AM=1./IM,IQ=127773,IR=2836,
-     *NTAB=32,NDIV=1+(IM-1)/NTAB,EPS=1.2E-7,RNMX=1.-EPS)
-      INTEGER J,K,IV(NTAB),IY
+     &           NTAB=32,NDIV=1+(IM-1)/NTAB,EPS=1.2E-7,RNMX=1.-EPS)
+      INTEGER*8    J,K,IV(NTAB),IY
+      
       SAVE IV,IY
       DATA IV /NTAB*0/, IY /0/
-      IF (IDUM.LE.0.OR.IY.EQ.0) THEN
+      IF (IDUM.LE.0 .OR. IY.EQ.0) THEN
         IDUM=MAX(-IDUM,1)
         DO 11 J=NTAB+8,1,-1
           K=IDUM/IQ
@@ -2043,32 +2181,32 @@ C RANDOM NUMBER GENERATOR
       J=1+IY/NDIV
       IY=IV(J)
       IV(J)=IDUM
-      RAN1=MIN(AM*IY,RNMX)
+      RAN1=DMIN1(AM*IY,RNMX)
 
       RETURN
       END
 
 
-C******************************************************************
-C     SECTION FOR SOLVING UNCOUPLED MOMENTUM EQS. OF NAVIER-STOKES EQS.
-C     - RHSNLHS-EI.F
-C     - USES 2ND. ORDER CRANK-NICHOLSON METHOD FOR VISCOUS TERMS
-C     - USES 3RD. ORDER RUNGE-KUTTA METHOD FOR CONVECTIVE TERMS
-C     - ADI SCHEME IS USED TO SOLVE ELLIPTIC MOMENTUM EQS. IN Z->Y->X
-C       ORDER
-C     - CAN HANDLE OPEN( 2 TYPES ) OR CLOSED TOP ACCORDING TO ITOPEN.
-C     - FOR THESE SUBROUTINES, 'COMMON/WRK2~4/~ ' VARIABLES WORK
-C       AS TEMPORARY STORAGE. THEY STORE NUt AT EXCEPT CELL CENTER AND
-C       SHOULD NOT BE MODIFIED FOR WHOLE SGS & RHSNLHS PROCESS
-C     - TO REDUCE REQUIRED MEMORY FOR DNS, ERASE COMMON STATEMENTS
-C       HAVING TNU,TNUX,TNUY,TNUZ WHICH STORE SGS VISCOSITY FOR LES
-C       IN WHOLE RHSNLHS ROUTINES
-C     - MUST BE ACCOMPANIED BY LHS-EI.F OR LHS-EI-L.F(IN CASE OF LES)
-C
-C                                  LAST REVISED BY JUNGWOO KIM
-C                                            1999.08.04.   11:00
-c     -code for Interpolation scehme(bilinear interploation)
-C******************************************************************
+!C******************************************************************
+!C     SECTION FOR SOLVING UNCOUPLED MOMENTUM EQS. OF NAVIER-STOKES EQS.
+!C     - RHSNLHS-EI.F
+!C     - USES 2ND. ORDER CRANK-NICHOLSON METHOD FOR VISCOUS TERMS
+!C     - USES 3RD. ORDER RUNGE-KUTTA METHOD FOR CONVECTIVE TERMS
+!C     - ADI SCHEME IS USED TO SOLVE ELLIPTIC MOMENTUM EQS. IN Z->Y->X
+!C       ORDER
+!C     - CAN HANDLE OPEN( 2 TYPES ) OR CLOSED TOP ACCORDING TO ITOPEN.
+!C     - FOR THESE SUB-ROUTINES, 'COMMON/WRK2~4/~ ' VARIABLES WORK
+!C       AS TEMPORARY STORAGE. THEY STORE NUt AT EXCEPT CELL CENTER AND
+!C       SHOULD NOT BE MODIFIED FOR WHOLE SGS & RHSNLHS PROCESS
+!C     - TO REDUCE REQUIRED MEMORY FOR DNS, ERASE COMMON STATEMENTS
+!C       HAVING TNU,TNUX,TNUY,TNUZ WHICH STORE SGS VISCOSITY FOR LES
+!C       IN WHOLE RHSNLHS ROUTINES
+!C     - MUST BE ACCOMPANIED BY LHS-EI.F OR LHS-EI-L.F(IN CASE OF LES)
+!C
+!C                                  LAST REVISED BY JUNGWOO KIM
+!C                                            1999.08.04.   11:00
+!c     -code for Interpolation scehme(bilinear interploation)
+!C******************************************************************
 
 !***********************************************************************
 !       FULLY IMPLICIT & FULLY EXPLICIT DIRECT NUMERICAL SIMULATION CODE
@@ -2081,10 +2219,10 @@ C******************************************************************
 !
 !                                                  2013.10. KIYOUNH KIM
 !***********************************************************************
-C*******************************************************************
-      SUBROUTINE RHSNLHS(ITRACKING,IPOISS,U,V,W,P,PSI_XN,PSI_YN,PSI_ZN
+!C*******************************************************************
+      SUBROUTINE RHSNLHS(itracking,U,V,W,P,PSI_XN,PSI_YN,PSI_ZN
      &,PSI_CN,RK3XO,RK3YO,RK3ZO,ANPSO,QVOL_ORI,VOL1)
-C*******************************************************************
+!*******************************************************************
       USE FLOW_VAR
       USE TWO_PHASE_PROPERTY
 
@@ -2099,151 +2237,96 @@ C*******************************************************************
       
       IMPLICIT NONE
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL P(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 P(0:M1,0:M2,0:M3)
 
-      REAL PSI_XN(0:M1,0:M2,0:M3)
-      REAL PSI_YN(0:M1,0:M2,0:M3)
-      REAL PSI_ZN(0:M1,0:M2,0:M3)
-      REAL PSI_CN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_XN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_YN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_ZN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_CN(0:M1,0:M2,0:M3)
 
-      REAL RK3XO(M1M,M2M,M3M),RK3YO(M1M,M2M,M3M),RK3ZO(M1M,M2M,M3M)
-      REAL ANPSO(M1M,M2M,M3M)
+      REAL*8 RK3XO(M1M,M2M,M3M),RK3YO(M1M,M2M,M3M),RK3ZO(M1M,M2M,M3M)
+      REAL*8 ANPSO(M1M,M2M,M3M)
 
-      REAL DENF_X(0:M1,0:M2,0:M3)
-      REAL DENF_Y(0:M1,0:M2,0:M3)
-      REAL DENF_Z(0:M1,0:M2,0:M3)
-      REAL DENF_C(0:M1,0:M2,0:M3)
+      REAL*8 DENF_X(0:M1,0:M2,0:M3)
+      REAL*8 DENF_Y(0:M1,0:M2,0:M3)
+      REAL*8 DENF_Z(0:M1,0:M2,0:M3)
+      REAL*8 DENF_C(0:M1,0:M2,0:M3)
       
-      REAL QVOL_ORI
-      REAL VOL1
+      REAL*8 QVOL_ORI
+      REAL*8 VOL1
       
-      REAL DF_X(0:M1,0:M2,0:M3,3),VF_X(0:M1,0:M2,0:M3,3)
-      REAL DF_Y(0:M1,0:M2,0:M3,3),VF_Y(0:M1,0:M2,0:M3,3)
-      REAL DF_Z(0:M1,0:M2,0:M3,3),VF_Z(0:M1,0:M2,0:M3,3)
-      REAL DF_C(0:M1,0:M2,0:M3,3)
+      REAL*8 DF_X(0:M1,0:M2,0:M3,3),VF_X(0:M1,0:M2,0:M3,3)
+      REAL*8 DF_Y(0:M1,0:M2,0:M3,3),VF_Y(0:M1,0:M2,0:M3,3)
+      REAL*8 DF_Z(0:M1,0:M2,0:M3,3),VF_Z(0:M1,0:M2,0:M3,3)
+      REAL*8 DF_C(0:M1,0:M2,0:M3,3)
 
-      REAL RHS1(M1M,M2M,M3M,3)
-      REAL DENF_XI(0:M1,0:M2,0:M3),DENF_YI(0:M1,0:M2,0:M3)
+      REAL*8 RHS1(M1M,M2M,M3M,3)
+      REAL*8 DENF_XI(0:M1,0:M2,0:M3),DENF_YI(0:M1,0:M2,0:M3)
      &                                         ,DENF_ZI(0:M1,0:M2,0:M3) 
      
-      REAL PSI_X(0:M1,0:M2,0:M3),PSI_Y(0:M1,0:M2,0:M3)
+      REAL*8 PSI_X(0:M1,0:M2,0:M3),PSI_Y(0:M1,0:M2,0:M3)
      &                     ,PSI_Z(0:M1,0:M2,0:M3),PSI_C(0:M1,0:M2,0:M3)
 
-      INTEGER IPOISS
-      INTEGER ITRACKING
+      INTEGER*8 I,J,K,ITRACKING
+      REAL*8 QM1
 
-      INTEGER I,J,K
-      REAL QM1
-
-      REAL WRITE_ON
-      REAL RHS11,RHS22,RHS33,UU,VV,WW
-      REAL DENSC,DENSCF
+      REAL*8 WRITE_ON
+      REAL*8 RHS11,RHS22,RHS33,UU,VV,WW
+      REAL*8 DENSC,DENSCF
       
 
+!$OMP PARALLEL DO private(i,j)
+       do k=1,n3m
+       do j=1,n2m
+       do i=1,n1m
+       rhs1(i,j,k,1)=0d0
+       rhs1(i,j,k,2)=0d0
+       rhs1(i,j,k,3)=0d0
+       enddo
+       enddo
+       enddo      
       write_on=0
 
 !      IF(ICH.EQ.1)CALL QVOLCALC(QVOL1,1,W,PSI_ZN,DENF_Z,VOL1)
       CALL REAL_TIME(CONTINUITY_B(MSUB))
-      CALL CAL_CONTINUITY(ITRACKING,DF_X,DF_Y,DF_Z,DF_C,VF_X,VF_Y,VF_Z
+      CALL CAL_CONTINUITY(DF_X,DF_Y,DF_Z,DF_C,VF_X,VF_Y,VF_Z
      &,U,V,W,PSI_XN,PSI_YN,PSI_ZN,PSI_CN,PSI_X,PSI_Y,PSI_Z,PSI_C)
 
-!$OMP PARALLEL DO private(I,J)
-       DO K=1,N3M
-       DO J=1,N2M
-       DO I=1,N1M !not start at IBG. WE need I=1 for POISSON_SOLVER even though we don`t use periodic condition.
-        DENF_X(I,J,K)=DENM+DEN_DIFF*PSI_X(I,J,K)
-        DENF_XI(I,J,K)=1./DENF_X(I,J,K)
-       ENDDO
-       ENDDO
-       ENDDO
-       IF (IPX .NE. 1) THEN
-!$OMP PARALLEL DO private(J)
-       DO K=1,N3M
-       DO J=1,N2M
-        DENF_X(N1,J,K)=DENF_X(N1M,J,K)
-        DENF_XI(N1,J,K)=DENF_XI(N1M,J,K) !FOR VARIABLE POISSON EQN.
-       ENDDO
-       ENDDO
-       ENDIF
+      CALL CAL_CONT_BC(PSI_X,PSI_Y,PSI_Z,PSI_C,
+     &     DENF_X,DENF_XI,DENF_Y,DENF_YI,DENF_Z,DENF_ZI,DENF_C)
 
-!$OMP PARALLEL DO private(I,J)
-       DO K=1,N3M
-       DO J=1,N2M
-       DO I=1,N1M
-        DENF_Y(I,J,K)=DENM+DEN_DIFF*PSI_Y(I,J,K)
-        DENF_YI(I,J,K)=1./DENF_Y(I,J,K)
-       ENDDO
-       ENDDO
-       ENDDO
-       IF (IPY .NE. 1) THEN
-!$OMP PARALLEL DO private(I)
-       DO K=1,N3M
-       DO I=1,N1M
-        DENF_Y(I,N2,K)=DENF_Y(I,N2M,K)
-        DENF_YI(I,N2,K)=DENF_YI(I,N2M,K) !FOR VARIABLE POISSON EQN.
-       ENDDO
-       ENDDO
-       ENDIF
-
-       IF (N3M .NE. 1) THEN
-!$OMP PARALLEL DO private(I,J)
-       DO K=1,N3M
-       DO J=1,N2M
-       DO I=1,N1M
-         DENF_Z(I,J,K)=DENM+DEN_DIFF*PSI_Z(I,J,K)
-         DENF_ZI(I,J,K)=1./DENF_Z(I,J,K)
-        ENDDO
-        ENDDO
-        ENDDO
-       IF (IPZ .NE. 1) THEN
-!$OMP PARALLEL DO private(I)
-       DO J=1,N2M
-       DO I=1,N1M
-        DENF_Z(I,J,N3)=DENF_Z(I,J,N3M)
-        DENF_ZI(I,J,N3)=DENF_ZI(I,J,N3M) !FOR VARIABLE POISSON EQN.
-       ENDDO
-       ENDDO
-       ENDIF
-       ENDIF
-
-!$OMP PARALLEL DO private(I,J)
-       DO K=1,N3M
-       DO J=1,N2M
-       DO I=1,N1M
-        DENF_C(I,J,K)=DENM+DEN_DIFF*PSI_C(I,J,K)
-       ENDDO
-       ENDDO
-       ENDDO
       CALL REAL_TIME(CONTINUITY_E(MSUB))
 
-       !ENERGY_EQUATION
-        IF (IPS .EQ. 1) THEN
-
-      	 CALL CAL_RHSPS(U,V,W,ANPSO,PSI_CN,DF_C)
-         IF (IBMON.EQ.1) CALL RHS_IBM_PS(PSI_CN,PSI_C)
+      !ENERGY_EQUATION
+        IF (IPS .EQ. 1 ) THEN !m.ne.1 은 초기tfield extp가 잘되도록..         
+       
+         CALL CAL_RHSPS(U,V,W,ANPSO,PSI_CN,DF_C)
+         
+         IF (IBMON.EQ.1) CALL RHS_IBM_PS1(PSI_CN,PSI_C)
+         
 !$OMP PARALLEL DO private(I,J,DENSC,DENSCF)
          DO K=1,N3M
          DO J=1,N2M
          DO I=1,N1M
-         	DENSC=DENSCM+DENSC_DIFF*PSI_CN(I,J,K)
-         	DENSCF=DENSCM+DENSC_DIFF*PSI_C(I,J,K)
-
-          RHSPS(I,J,K)=( (DENSC-DENSCF)*T(I,J,K)+RHSPS(I,J,K)	)/DENSCF
+           DENSC=DENSCM+DENSC_DIFF*PSI_CN(I,J,K)
+           DENSCF=DENSCM+DENSC_DIFF*PSI_C(I,J,K)           
+             
+           RHSPS(I,J,K)=( (DENSC-DENSCF)*T(I,J,K)+RHSPS(I,J,K))/DENSCF
          ENDDO
          ENDDO
          ENDDO
 
-         CALL LHSPS(U,V,W,PSI_CN,PSI_C,DF_C)
+      CALL LHSPS(PSI_CN,PSI_C,DF_C)
 
-       ENDIF
+      ENDIF ! IF IPS.EQ.1 : ENERGY EQUATION
         
-C-----MOMENTUM EQUATION SOLVER
+!C-----MOMENTUM EQUATION SOLVER
       !CAL RHS
       CALL REAL_TIME(ANSETIME_B(MSUB))
-       CALL RHSX(ITRACKING,RHS1,U,V,W,P,DF_X,VF_X,PSI_XN,RK3XO)
-       CALL RHSY(ITRACKING,RHS1,U,V,W,P,DF_Y,VF_Y,PSI_YN,RK3YO)
-      IF (N3M .NE. 1) CALL RHSZ(ITRACKING,RHS1,U,V,W,P,DF_Z,VF_Z,PSI_ZN,
+       CALL RHSX(RHS1,U,V,W,P,DF_X,VF_X,PSI_XN,RK3XO)
+       CALL RHSY(RHS1,U,V,W,P,DF_Y,VF_Y,PSI_YN,RK3YO)
+      IF (N3M .NE. 1) CALL RHSZ(RHS1,U,V,W,P,DF_Z,VF_Z,PSI_ZN,
      &DENF_Z,RK3ZO)
 
        IF (IBMON.NE.0) THEN
@@ -2252,7 +2335,7 @@ C-----MOMENTUM EQUATION SOLVER
           IF (N3M .NE. 1)CALL RHS_IBMZ(RHS1,DENF_Z,U,V,W)
        ENDIF
        IF (ITRACKING .NE. 0) DEALLOCATE(SUR_X,SUR_Y,SUR_Z)
-
+       
       !FOR DELTA-FORMULATION. 
 !$OMP PARALLEL DO private(I,J)
        DO K=1,N3M
@@ -2284,10 +2367,9 @@ C-----MOMENTUM EQUATION SOLVER
       ENDIF
  
       !CAL LHS
-       CALL LHSU(RHS1,U(0,0,0),V(0,0,0),W(0,0,0),DF_X,VF_X,DENF_XI)
-       CALL LHSV(RHS1,U(0,0,0),V(0,0,0),W(0,0,0),DF_Y,VF_Y,DENF_YI)
-       IF (N3M .NE. 1) CALL LHSW(RHS1,U(0,0,0),V(0,0,0),W(0,0,0)
-     &,DF_Z,VF_Z,DENF_ZI)
+       CALL LHSU(RHS1,U,V,W,DF_X,VF_X,DENF_XI)
+       CALL LHSV(RHS1,U,V,W,DF_Y,VF_Y,DENF_YI)
+       IF (N3M .NE. 1) CALL LHSW(RHS1,U,V,W,DF_Z,VF_Z,DENF_ZI)
  
 !        DO K=1,N3M
 !        DO J=1,N2M
@@ -2318,11 +2400,10 @@ C-----MOMENTUM EQUATION SOLVER
      &,QVOL_ORI,VOL1)
 
       CALL REAL_TIME(ANSETIME_E(MSUB))
+      CALL REAL_TIME(POISSTIME_B(MSUB))  
 
-      CALL real_time(POISSTIME_B(MSUB))
-
-       CALL PRESSURE_CORRECTION(IPOISS,U(0,0,0),V(0,0,0),W(0,0,0)
-     &,P(0,0,0),DENF_Y,DENF_C,DENF_XI,DENF_YI,DENF_ZI)
+       CALL PRESSURE_CORRECTION(U,V,W,P,
+     &  DENF_Y,DENF_C,DENF_XI,DENF_YI,DENF_ZI)
        CALL QVOLCALC(QM1,3,W,PSI_ZN,DENF_Z,VOL1) !FOR WRITE THE MASS FLOW RATE
 
        IF(ICH .NE. 0 ) CALL MEANPGR(W,PSI_ZN,PSI_CN,DENF_Z,VOL1)
@@ -2332,128 +2413,128 @@ C-----MOMENTUM EQUATION SOLVER
       	IF (MSUB .EQ. 3) CALL WRITEHISTORY_HEAT(W,PSI_C)
       ENDIF
 
-      if ( write_on .eq. 1 ) then
-!!C=====SAVE
-      IF ( MSUB .EQ. 1 ) THEN
-       OPEN(144,FILE='0RHS1.DAT')
-       WRITE(144,*) 'VARIABLES="X","Y","Z","u","v","w"'
-      WRITE(144,*) 'ZONE I=',N1M,',J=',N2M,',K=',N3M,',F=POINT'
-
-      OPEN(145,FILE='0u_hat1.DAT')
-       WRITE(145,*) 'VARIABLES="X","Y","Z","u","v","w"'
-      WRITE(145,*) 'ZONE I=',N1M,',J=',N2M,',K=',N3M,',F=POINT'  
-
-       DO K=1,N3M
-       DO J=1,N2M
-       DO I=1,N1M
-         RHS11=0.5*(RHS1(I,J,K,1)+RHS1(IPV(I),J,K,1))
-         RHS22=0.5*(RHS1(I,J,K,2)+RHS1(I,JPV(J),K,2))
-         RHS33=0.5*(RHS1(I,J,K,3)+RHS1(I,J,KPV(K),3))
-!         RHS11=RHS1(I,J,K,1)
-!         RHS22=RHS1(I,J,K,2)
-!         RHS33=RHS1(I,J,K,3)  
-       WRITE(144,148) XP(I),YP(J),ZP(K),RHS11,RHS22,RHS33
-         UU=0.5*(U(I,J,K)+U(IPV(I),J,K))
-         VV=0.5*(V(I,J,K)+V(I,JPV(J),K))
-         WW=0.5*(W(I,J,K)+W(I,J,KPV(K)))
-!         UU=U(I,J,K)
-!         VV=V(I,J,K)
-!         WW=W(I,J,K)
-       WRITE(145,147) XP(I),YP(J),ZP(K),UU,VV,WW
-        ENDDO
-        ENDDO
-        ENDDO
-
-       close(144)
-       close(145)
-
-      ENDIF
-
-
-!!C=====SAVE
-      IF ( MSUB .EQ. 2 ) THEN
-       OPEN(144,FILE='0RHS2.DAT')
-       WRITE(144,*) 'VARIABLES="X","Y","Z","u","v","w"'
-      WRITE(144,*) 'ZONE I=',N1M,',J=',N2M,',K=',N3M,',F=POINT'
-
-      OPEN(145,FILE='0u_hat2.DAT')
-       WRITE(145,*) 'VARIABLES="X","Y","Z","u","v","w"'
-      WRITE(145,*) 'ZONE I=',N1M,',J=',N2M,',K=',N3M,',F=POINT'  
-
-       DO K=1,N3M
-       DO J=1,N2M
-       DO I=1,N1M
-         RHS11=0.5*(RHS1(I,J,K,1)+RHS1(IPV(I),J,K,1))
-         RHS22=0.5*(RHS1(I,J,K,2)+RHS1(I,JPV(J),K,2))
-         RHS33=0.5*(RHS1(I,J,K,3)+RHS1(I,J,KPV(K),3))
-!         RHS11=RHS1(I,J,K,1)
-!         RHS22=RHS1(I,J,K,2)
-!         RHS33=RHS1(I,J,K,3)  
-       WRITE(144,148) XP(I),YP(J),ZP(K),RHS11,RHS22,RHS33
-         UU=0.5*(U(I,J,K)+U(IPV(I),J,K))
-         VV=0.5*(V(I,J,K)+V(I,JPV(J),K))
-         WW=0.5*(W(I,J,K)+W(I,J,KPV(K)))
-!         UU=U(I,J,K)
-!         VV=V(I,J,K)
-!         WW=W(I,J,K)
-       WRITE(145,147) XP(I),YP(J),ZP(K),UU,VV,WW
-        ENDDO
-        ENDDO
-        ENDDO
-
-       close(144)
-       close(145)
-
-      ENDIF
-
-!!C=====SAVE
-      IF ( MSUB .EQ. 3 ) THEN
-       OPEN(144,FILE='0RHS3.DAT')
-       WRITE(144,*) 'VARIABLES="X","Y","Z","u","v","w"'
-      WRITE(144,*) 'ZONE I=',N1M,',J=',N2M,',K=',N3M,',F=POINT'
       
-      OPEN(145,FILE='0u_hat3.DAT')
-       WRITE(145,*) 'VARIABLES="X","Y","Z","u","v","w"'
-      WRITE(145,*) 'ZONE I=',N1M,',J=',N2M,',K=',N3M,',F=POINT'  
+      
+      
+      ! if ( write_on .eq. 1 ) then
+! !!C=====SAVE
+      ! IF ( MSUB .EQ. 1 ) THEN
+       ! OPEN(144,FILE='0RHS1.DAT')
+       ! WRITE(144,*) 'VARIABLES="X","Y","Z","u","v","w"'
+      ! WRITE(144,*) 'ZONE I=',N1M,',J=',N2M,',K=',N3M,',F=POINT'
 
-       DO K=1,N3M
-       DO J=1,N2M
-       DO I=1,N1M
-         RHS11=0.5*(RHS1(I,J,K,1)+RHS1(IPV(I),J,K,1))
-         RHS22=0.5*(RHS1(I,J,K,2)+RHS1(I,JPV(J),K,2))
-         RHS33=0.5*(RHS1(I,J,K,3)+RHS1(I,J,KPV(K),3))
-!         RHS11=RHS1(I,J,K,1)
-!         RHS22=RHS1(I,J,K,2)
-!         RHS33=RHS1(I,J,K,3)  
-       WRITE(144,148) XP(I),YP(J),ZP(K),RHS11,RHS22,RHS33
-         UU=0.5*(U(I,J,K)+U(IPV(I),J,K))
-         VV=0.5*(V(I,J,K)+V(I,JPV(J),K))
-         WW=0.5*(W(I,J,K)+W(I,J,KPV(K)))
-!         UU=U(I,J,K)
-!         VV=V(I,J,K)
-!         WW=W(I,J,K)
-       WRITE(145,147) XP(I),YP(J),ZP(K),UU,VV,WW
+      ! OPEN(145,FILE='0u_hat1.DAT')
+       ! WRITE(145,*) 'VARIABLES="X","Y","Z","u","v","w"'
+      ! WRITE(145,*) 'ZONE I=',N1M,',J=',N2M,',K=',N3M,',F=POINT'  
 
-        ENDDO
-        ENDDO
-        ENDDO
+       ! DO K=1,N3M
+       ! DO J=1,N2M
+       ! DO I=1,N1M
+         ! RHS11=0.5*(RHS1(I,J,K,1)+RHS1(IPV(I),J,K,1))
+         ! RHS22=0.5*(RHS1(I,J,K,2)+RHS1(I,JPV(J),K,2))
+         ! RHS33=0.5*(RHS1(I,J,K,3)+RHS1(I,J,KPV(K),3))
+! !         RHS11=RHS1(I,J,K,1)
+! !         RHS22=RHS1(I,J,K,2)
+! !         RHS33=RHS1(I,J,K,3)  
+       ! WRITE(144,148) XP(I),YP(J),ZP(K),RHS11,RHS22,RHS33
+         ! UU=0.5*(U(I,J,K)+U(IPV(I),J,K))
+         ! VV=0.5*(V(I,J,K)+V(I,JPV(J),K))
+         ! WW=0.5*(W(I,J,K)+W(I,J,KPV(K)))
+! !         UU=U(I,J,K)
+! !         VV=V(I,J,K)
+! !         WW=W(I,J,K)
+       ! WRITE(145,147) XP(I),YP(J),ZP(K),UU,VV,WW
+        ! ENDDO
+        ! ENDDO
+        ! ENDDO
+       ! close(144)
+       ! close(145)
 
-       close(144)
-       close(145)
+      ! ENDIF
 
-      ENDIF
+! !!C=====SAVE
+      ! IF ( MSUB .EQ. 2 ) THEN
+       ! OPEN(144,FILE='0RHS2.DAT')
+       ! WRITE(144,*) 'VARIABLES="X","Y","Z","u","v","w"'
+      ! WRITE(144,*) 'ZONE I=',N1M,',J=',N2M,',K=',N3M,',F=POINT'
 
- 148  FORMAT(3F18.14,3ES20.12)
- 147  FORMAT(3F18.14,3ES20.12) 
-       endif
+      ! OPEN(145,FILE='0u_hat2.DAT')
+       ! WRITE(145,*) 'VARIABLES="X","Y","Z","u","v","w"'
+      ! WRITE(145,*) 'ZONE I=',N1M,',J=',N2M,',K=',N3M,',F=POINT'  
+
+       ! DO K=1,N3M
+       ! DO J=1,N2M
+       ! DO I=1,N1M
+         ! RHS11=0.5*(RHS1(I,J,K,1)+RHS1(IPV(I),J,K,1))
+         ! RHS22=0.5*(RHS1(I,J,K,2)+RHS1(I,JPV(J),K,2))
+         ! RHS33=0.5*(RHS1(I,J,K,3)+RHS1(I,J,KPV(K),3))
+! !         RHS11=RHS1(I,J,K,1)
+! !         RHS22=RHS1(I,J,K,2)
+! !         RHS33=RHS1(I,J,K,3)  
+       ! WRITE(144,148) XP(I),YP(J),ZP(K),RHS11,RHS22,RHS33
+         ! UU=0.5*(U(I,J,K)+U(IPV(I),J,K))
+         ! VV=0.5*(V(I,J,K)+V(I,JPV(J),K))
+         ! WW=0.5*(W(I,J,K)+W(I,J,KPV(K)))
+! !         UU=U(I,J,K)
+! !         VV=V(I,J,K)
+! !         WW=W(I,J,K)
+       ! WRITE(145,147) XP(I),YP(J),ZP(K),UU,VV,WW
+        ! ENDDO
+        ! ENDDO
+        ! ENDDO
+
+       ! close(144)
+       ! close(145)
+
+      ! ENDIF
+
+! !!C=====SAVE
+      ! ! IF ( MSUB .EQ. 3 ) THEN
+       ! ! OPEN(144,FILE='0RHS3.DAT')
+       ! ! WRITE(144,*) 'VARIABLES="X","Y","Z","u","v","w"'
+      ! ! WRITE(144,*) 'ZONE I=',N1M,',J=',N2M,',K=',N3M,',F=POINT'
+      
+      ! ! OPEN(145,FILE='0u_hat3.DAT')
+       ! ! WRITE(145,*) 'VARIABLES="X","Y","Z","u","v","w"'
+      ! ! WRITE(145,*) 'ZONE I=',N1M,',J=',N2M,',K=',N3M,',F=POINT'  
+
+       ! ! DO K=1,N3M
+       ! ! DO J=1,N2M
+       ! ! DO I=1,N1M
+         ! ! RHS11=0.5*(RHS1(I,J,K,1)+RHS1(IPV(I),J,K,1))
+         ! ! RHS22=0.5*(RHS1(I,J,K,2)+RHS1(I,JPV(J),K,2))
+         ! ! RHS33=0.5*(RHS1(I,J,K,3)+RHS1(I,J,KPV(K),3))
+! ! !         RHS11=RHS1(I,J,K,1)
+! ! !         RHS22=RHS1(I,J,K,2)
+! ! !         RHS33=RHS1(I,J,K,3)  
+       ! ! WRITE(144,148) XP(I),YP(J),ZP(K),RHS11,RHS22,RHS33
+         ! ! UU=0.5*(U(I,J,K)+U(IPV(I),J,K))
+         ! ! VV=0.5*(V(I,J,K)+V(I,JPV(J),K))
+         ! ! WW=0.5*(W(I,J,K)+W(I,J,KPV(K)))
+! ! !         UU=U(I,J,K)
+! ! !         VV=V(I,J,K)
+! ! !         WW=W(I,J,K)
+       ! ! WRITE(145,147) XP(I),YP(J),ZP(K),UU,VV,WW
+
+        ! ! ENDDO
+        ! ! ENDDO
+        ! ! ENDDO
+
+       ! ! close(144)
+       ! ! close(145)
+
+      ! ENDIF
+ ! 148  FORMAT(3F18.14,3ES20.12)
+ ! 147  FORMAT(3F18.14,3ES20.12) 
+       ! endif
 
       RETURN
       END
 
-C******************************************************************
-      SUBROUTINE RHSX(ITRACKING,RHS1,U,V,W,P,DF_X,VF_X,PSI_XN,RK3XO)
-C******************************************************************
-C     CALCULATION OF RHS(NAVIER-STOKES)
+!******************************************************************
+      SUBROUTINE RHSX(RHS1,U,V,W,P,DF_X,VF_X,PSI_XN,RK3XO)
+!******************************************************************
+!     CALCULATION OF RHS(NAVIER-STOKES)
       USE PARAM_VAR
       USE FLOW_VAR
 
@@ -2463,25 +2544,24 @@ C     CALCULATION OF RHS(NAVIER-STOKES)
 
       IMPLICIT NONE
 
-      REAL RHS1(M1M,M2M,M3M,3)
-      REAL RK3XO(M1M,M2M,M3M)
+      REAL*8 RHS1(M1M,M2M,M3M,3)
+      REAL*8 RK3XO(M1M,M2M,M3M)
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL P(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 P(0:M1,0:M2,0:M3)
 
-      REAL PSI_XN(0:M1,0:M2,0:M3)
-      REAL DF_X(0:M1,0:M2,0:M3,3),VF_X(0:M1,0:M2,0:M3,3)
+      REAL*8 PSI_XN(0:M1,0:M2,0:M3)
+      REAL*8 DF_X(0:M1,0:M2,0:M3,3),VF_X(0:M1,0:M2,0:M3,3)
       
-      INTEGER ITRACKING
       
-      INTEGER I,J,K,IP1,IM1,JP1,JM1,KP1,KM1
-      REAL UE,UW,UN,US,UT,UB,VN,VS,WT,WB
-      REAL ANXX,ANXY,ANXZ,ANX
-      REAL ALX1,ALX2,ALX3,ALX4,ALX5,ALX6,ALX7,ALX8,ALX9,ALX10
-      REAL ALXX,ALXY,ALXZ,TALXX,TALXY,TALXZ,ALX_SUM1,ALX_SUM2
-      REAL PGR_X,RK3X,CN2X,DEN_XN,BUOYANCY
+      INTEGER*8 I,J,K,IP1,IM1,JP1,JM1,KP1,KM1
+      REAL*8 UE,UW,UN,US,UT,UB,VN,VS,WT,WB
+      REAL*8 ANXX,ANXY,ANXZ,ANX
+      REAL*8 ALX1,ALX2,ALX3,ALX4,ALX5,ALX6,ALX7,ALX8,ALX9,ALX10
+      REAL*8 ALXX,ALXY,ALXZ,TALXX,TALXY,TALXZ,ALX_SUM1,ALX_SUM2
+      REAL*8 PGR_X,RK3X,CN2X,DEN_XN,BUOYANCY
 
-C-----RHS1 calculation for u momentum -----------------
+!C-----RHS1 calculation for u momentum -----------------
 !$OMP PARALLEL DO private(I,J,IP1,IM1,JP1,JM1,KP1,KM1)
 !$OMP&private(UE,UW,UN,US,UT,UB,VN,VS,WT,WB)
 !$OMP&private(ANXX,ANXY,ANXZ,ANX,ALX1,ALX2,ALX3,ALX4,ALX5,ALX6,ALX7)
@@ -2497,7 +2577,7 @@ C-----RHS1 calculation for u momentum -----------------
          IP1=IPV(I)
          IM1=IMV(I)
 
-c-----Cdvection
+!c-----Cdvection
       UE=0.5*(U(IP1,J,K)+U(I,J,K))
       UW=0.5*(U(I,J,K)+U(IM1,J,K))
 
@@ -2615,7 +2695,7 @@ c-----Cdvection
       PGR_X=(P(I,J,K)-P(IM1,J,K))*VVDX(I)
 
       !BUOYANCY
-      !DEN_XN=(DENM+DEN_DIFF*PSI_XN(I,J,K))
+      DEN_XN=(DENM+DEN_DIFF*PSI_XN(I,J,K))
       BUOYANCY=0.!0.5*(DEN_XN+DENF_X(I,J,K) )*GRAVITY
 
       RK3X=ANX+ALX_SUM2
@@ -2623,12 +2703,14 @@ c-----Cdvection
 !      RK3X=ANX+ALX_SUM1+ALX_SUM2
 !      CN2X=0.
 
-      RHS1(I,J,K,1)=(DENM+DEN_DIFF*PSI_XN(I,J,K))*U(I,J,K)
+      RHS1(I,J,K,1)=den_xn*U(I,J,K)
      &        +( GAMMA(MSUB)*RK3X+RO(MSUB)*RK3XO(I,J,K)
      &        +2.*ALPHA_RK3*CN2X
      &        +2.*ALPHA_RK3*(SUR_X(I,J,K)-PGR_X)
      &        -2.*ALPHA_RK3*BUOYANCY
      &        )*DT
+     
+           
       RK3XO(I,J,K)=RK3X
 
  1000  CONTINUE
@@ -2636,38 +2718,36 @@ c-----Cdvection
       RETURN
       END
 
-C******************************************************************
-      SUBROUTINE RHSY(ITRACKING,RHS1,U,V,W,P,DF_Y,VF_Y,PSI_YN,RK3YO)
-C******************************************************************
-C     CALCULATION OF RHS(NAVIER-STOKES)
+!C******************************************************************
+      SUBROUTINE RHSY(RHS1,U,V,W,P,DF_Y,VF_Y,PSI_YN,RK3YO)
+!C******************************************************************
+!C     CALCULATION OF RHS(NAVIER-STOKES)
       USE PARAM_VAR
       USE FLOW_VAR
 
       USE FLOW_GEOM_VAR
 
       USE TWO_PHASE_PROPERTY
-      
+
       IMPLICIT NONE
 
-      REAL RHS1(M1M,M2M,M3M,3)
-      REAL RK3YO(M1M,M2M,M3M)
+      REAL*8 RHS1(M1M,M2M,M3M,3)
+      REAL*8 RK3YO(M1M,M2M,M3M)
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL P(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 P(0:M1,0:M2,0:M3)
 
-      REAL PSI_YN(0:M1,0:M2,0:M3)
-      REAL DF_Y(0:M1,0:M2,0:M3,3),VF_Y(0:M1,0:M2,0:M3,3)
-
-      INTEGER ITRACKING
+      REAL*8 PSI_YN(0:M1,0:M2,0:M3)
+      REAL*8 DF_Y(0:M1,0:M2,0:M3,3),VF_Y(0:M1,0:M2,0:M3,3)
       
-      INTEGER I,J,K,IP1,IM1,JP1,JM1,KP1,KM1
-      REAL VE,VW,VN,VS,VT,VB,UE,UW,WT,WB
-      REAL ANYX,ANYY,ANYZ,ANY
-      REAL ALY1,ALY2,ALY3,ALY4,ALY5,ALY6,ALY7,ALY8,ALY9,ALY10
-      REAL ALYX,ALYY,ALYZ,TALYX,TALYY,TALYZ,ALY_SUM1,ALY_SUM2
-      REAL PGR_Y,RK3Y,CN2Y,DEN_YN,BUOYANCY
+      INTEGER*8 I,J,K,IP1,IM1,JP1,JM1,KP1,KM1
+      REAL*8 VE,VW,VN,VS,VT,VB,UE,UW,WT,WB
+      REAL*8 ANYX,ANYY,ANYZ,ANY
+      REAL*8 ALY1,ALY2,ALY3,ALY4,ALY5,ALY6,ALY7,ALY8,ALY9,ALY10
+      REAL*8 ALYX,ALYY,ALYZ,TALYX,TALYY,TALYZ,ALY_SUM1,ALY_SUM2
+      REAL*8 PGR_Y,RK3Y,CN2Y,DEN_YN,BUOYANCY
       
-C-----RHS1 calculation for v momentum -----------------
+!C-----RHS1 calculation for v momentum -----------------
 !$OMP PARALLEL DO private(I,J,IP1,IM1,JP1,JM1,KP1,KM1)
 !$OMP&private(VE,VW,VN,VS,VT,VB,UE,UW,WT,WB)
 !$OMP&private(ANYX,ANYY,ANYZ,ANY,ALY1,ALY2,ALY3,ALY4,ALY5,ALY6,ALY7)
@@ -2683,7 +2763,7 @@ C-----RHS1 calculation for v momentum -----------------
          IP1=IPV(I)
          IM1=IMV(I)
 
-C-----CD2 FOR CONVECTION
+!C-----CD2 FOR CONVECTION
       UE=0.5*(SDY(JM1)*U(IP1,J,K)+SDY(J)*U(IP1,JM1,K))*VVDY(J)
       UW=0.5*(SDY(JM1)*U(I,J,K)+SDY(J)*U(I,JM1,K))*VVDY(J)
 
@@ -2801,7 +2881,7 @@ C-----CD2 FOR CONVECTION
        PGR_Y=(P(I,J,K)-P(I,JM1,K))*VVDY(J)
 
       !BUOYANCY
-       !DEN_YN=DENM+DEN_DIFF*PSI_YN(I,J,K)
+      DEN_YN=DENM+DEN_DIFF*PSI_YN(I,J,K)
       BUOYANCY=0.!0.5*(DEN_YN+DENF_Y(I,J,K) )*GRAVITY
 
       RK3Y=ANY+ALY_SUM2
@@ -2815,6 +2895,7 @@ C-----CD2 FOR CONVECTION
      &         +2.*ALPHA_RK3*(SUR_Y(I,J,K)-PGR_Y)
      &         -2.*ALPHA_RK3*BUOYANCY
      &        )*DT
+            
       RK3YO(I,J,K)=RK3Y
 
  1000  CONTINUE
@@ -2822,11 +2903,11 @@ C-----CD2 FOR CONVECTION
       RETURN
       END
 
-C******************************************************************
-      SUBROUTINE RHSZ(ITRACKING,RHS1,U,V,W,P,DF_Z,VF_Z,PSI_ZN,DENF_Z
+!C******************************************************************
+      SUBROUTINE RHSZ(RHS1,U,V,W,P,DF_Z,VF_Z,PSI_ZN,DENF_Z
      &,RK3ZO)
-C******************************************************************
-C     CALCULATION OF RHS(NAVIER-STOKES)
+!C******************************************************************
+!C     CALCULATION OF RHS(NAVIER-STOKES)
       USE PARAM_VAR
       USE FLOW_VAR
 
@@ -2836,28 +2917,28 @@ C     CALCULATION OF RHS(NAVIER-STOKES)
       
       IMPLICIT NONE
 
-      REAL RHS1(M1M,M2M,M3M,3)
-      REAL RK3ZO(M1M,M2M,M3M)
+      REAL*8 RHS1(M1M,M2M,M3M,3)
+      REAL*8 RK3ZO(M1M,M2M,M3M)
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL P(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 P(0:M1,0:M2,0:M3)
 
-      REAL DENF_Z(0:M1,0:M2,0:M3)
-      REAL PSI_ZN(0:M1,0:M2,0:M3)
-      REAL DF_Z(0:M1,0:M2,0:M3,3),VF_Z(0:M1,0:M2,0:M3,3)
+      REAL*8 DENF_Z(0:M1,0:M2,0:M3)
+      REAL*8 PSI_ZN(0:M1,0:M2,0:M3)
+      REAL*8 DF_Z(0:M1,0:M2,0:M3,3),VF_Z(0:M1,0:M2,0:M3,3)
 
-      INTEGER ITRACKING
+                       
 
-      INTEGER I,J,K,IP1,IM1,JP1,JM1,KP1,KM1
-      REAL UE,UW,VN,VS,WE,WW,WN,WS,WT,WB
-      REAL ANZX,ANZY,ANZZ,ANZ
-      REAL ALZ1,ALZ2,ALZ3,ALZ4,ALZ5,ALZ6,ALZ7,ALZ8,ALZ9,ALZ10
-      REAL ALZX,ALZY,ALZZ,TALZX,TALZY,TALZZ,ALZ_SUM1,ALZ_SUM2
-      REAL PGR_Z,RK3Z,CN2Z,DEN_ZN,BUOYANCY
+      INTEGER*8 I,J,K,IP1,IM1,JP1,JM1,KP1,KM1
+      REAL*8 UE,UW,VN,VS,WE,WW,WN,WS,WT,WB
+      REAL*8 ANZX,ANZY,ANZZ,ANZ
+      REAL*8 ALZ1,ALZ2,ALZ3,ALZ4,ALZ5,ALZ6,ALZ7,ALZ8,ALZ9,ALZ10
+      REAL*8 ALZX,ALZY,ALZZ,TALZX,TALZY,TALZZ,ALZ_SUM1,ALZ_SUM2
+      REAL*8 PGR_Z,RK3Z,CN2Z,DEN_ZN,BUOYANCY
 
-      REAL FUNCBODY
+      REAL*8 FUNCBODY
 
-C-----RHS1 calculation for w momentum -----------------
+!C-----RHS1 calculation for w momentum -----------------
 !$OMP PARALLEL DO private(I,J,IP1,IM1,JP1,JM1,KP1,KM1)
 !$OMP&private(UE,UW,VN,VS,WE,WW,WN,WS,WT,WB)
 !$OMP&private(ANZX,ANZY,ANZZ,ANZ,ALZ1,ALZ2,ALZ3,ALZ4,ALZ5,ALZ6,ALZ7)
@@ -2993,7 +3074,7 @@ C-----RHS1 calculation for w momentum -----------------
 
       !BUOYANCY
       DEN_ZN=(DENM+DEN_DIFF*PSI_ZN(I,J,K))
-      BUOYANCY=0.5*(DEN_ZN+DENF_Z(I,J,K) )*GRAVITY
+      BUOYANCY=0D0! 0.5*(DEN_ZN+DENF_Z(I,J,K) )*GRAVITY
 
       RK3Z=ANZ+ALZ_SUM2
       CN2Z=ALZ_SUM1
@@ -3021,9 +3102,10 @@ C-----RHS1 calculation for w momentum -----------------
      &         +2.*ALPHA_RK3*(SUR_Z(I,J,K)-PGR_Z)
      &         -2.*ALPHA_RK3*BUOYANCY
      &         -2.*ALPHA_RK3*(PMI+PMI_GRAV) )*DT
+                     
 
      
-       ELSE
+       ELSE ! FUNCBODY 에 대한 ELSE
       RHS1(I,J,K,3)=DEN_ZN*W(I,J,K)+
      &       ( GAMMA(MSUB)*RK3Z+RO(MSUB)*RK3ZO(I,J,K)
      &         +2.*ALPHA_RK3*CN2Z
@@ -3038,9 +3120,9 @@ C-----RHS1 calculation for w momentum -----------------
       RETURN
       END
 
-C******************************************************************
+!C******************************************************************
       SUBROUTINE LHSU(RHS1,U,V,W,DF_X,VF_X,DENF_XI)
-C******************************************************************
+!C******************************************************************
       USE PARAM_VAR
       
       USE FLOW_VAR
@@ -3048,24 +3130,24 @@ C******************************************************************
 
       IMPLICIT NONE
 
-      REAL RHS1(M1M,M2M,M3M,3)
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 RHS1(M1M,M2M,M3M,3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
 
-      REAL DF_X(0:M1,0:M2,0:M3,3),VF_X(0:M1,0:M2,0:M3,3)
-      REAL DENF_XI(0:M1,0:M2,0:M3)
+      REAL*8 DF_X(0:M1,0:M2,0:M3,3),VF_X(0:M1,0:M2,0:M3,3)
+      REAL*8 DENF_XI(0:M1,0:M2,0:M3)
 
-      real, dimension (:,:), allocatable :: AI,BI,CI,GI
-      real, dimension (:,:), allocatable :: AJ,BJ,CJ,GJ
-      real, dimension (:,:), allocatable :: AK,BK,CK,GK
+      REAL*8, DIMENSION (:,:), ALLOCATABLE :: AI,BI,CI,GI
+      REAL*8, DIMENSION (:,:), ALLOCATABLE :: AJ,BJ,CJ,GJ
+      REAL*8, DIMENSION (:,:), ALLOCATABLE :: AK,BK,CK,GK
 
-      INTEGER I,J,K
-      REAL DI1,DI2,DI3,DJ1,DJ2,DJ3,DK1,DK2,DK3
+      INTEGER*8 I,J,K
+      REAL*8 DI1,DI2,DI3,DJ1,DJ2,DJ3,DK1,DK2,DK3
       
-C=====ADI STARTS
+!C=====ADI STARTS
 
       IF (N3M.EQ.1) GOTO 100
 
-C-----Z-DIRECTION
+!C-----Z-DIRECTION
 !$OMP PARALLEL private(I,K,DK1,DK2,DK3)
 !$OMP&private(AK,CK,BK,GK)
       allocate(AK(M1,M3),BK(M1,M3),CK(M1,M3),GK(M1,M3))
@@ -3074,11 +3156,14 @@ C-----Z-DIRECTION
 
       DO 141 K=1,N3M
       DO 141 I=IBG,N1M
-
-!      DK1=ACOEF*DENF_XI(I,J,K)*VF_X(I,J,KMV(K),3)*AKUV(K)*(1.-FIXKL(K)) !NEWMANN
-!      DK3=ACOEF*DENF_XI(I,J,K)*VF_X(I,J,K,3)*CKUV(K)*(1.-FIXKU(K))
+      
+      if (ipz .eq. 0) then
+      DK1=ACOEF*DENF_XI(I,J,K)*VF_X(I,J,KMV(K),3)*AKUV(K)*(1.-FIXKL(K)) !NEUMANN
+      DK3=ACOEF*DENF_XI(I,J,K)*VF_X(I,J,K,3)*CKUV(K)*(1.-FIXKU(K))
+      elseif (ipz .eq. 1)then
       DK1=ACOEF*DENF_XI(I,J,K)*VF_X(I,J,KMV(K),3)*AKUV(K) !PERIODIC
       DK3=ACOEF*DENF_XI(I,J,K)*VF_X(I,J,K,3)*CKUV(K)
+      endif
       DK2=-DK1-DK3
 
       AK(I,K)=DK1
@@ -3114,14 +3199,17 @@ C-----Z-DIRECTION
 !$OMP DO
       DO 40 K=1,N3M
 
-C-----Y-DIRECTION
+!C-----Y-DIRECTION
       DO 91 J=1,N2M
       DO 91 I=IBG,N1M
-
-!      DJ1=ACOEF*DENF_XI(I,J,K)*VF_X(I,JMV(J),K,2)*AJUW(J)*(1.-FIXJL(J)) !NEUMANN
-!      DJ3=ACOEF*DENF_XI(I,J,K)*VF_X(I,J,K,2)*CJUW(J)*(1.-FIXJU(J))
-      DJ1=ACOEF*DENF_XI(I,J,K)*VF_X(I,JMV(J),K,2)*AJUW(J)  !PERIODIC
-      DJ3=ACOEF*DENF_XI(I,J,K)*VF_X(I,J,K,2)*CJUW(J)
+      
+       if (ipy .eq. 0) then 
+       DJ1=ACOEF*DENF_XI(I,J,K)*VF_X(I,JMV(J),K,2)*AJUW(J)*(1.-FIXJL(J)) !NEUMANN
+       DJ3=ACOEF*DENF_XI(I,J,K)*VF_X(I,J,K,2)*CJUW(J)*(1.-FIXJU(J))
+       elseif (ipy .eq. 1) then 
+       DJ1=ACOEF*DENF_XI(I,J,K)*VF_X(I,JMV(J),K,2)*AJUW(J)  !PERIODIC
+       DJ3=ACOEF*DENF_XI(I,J,K)*VF_X(I,J,K,2)*CJUW(J)
+       endif
       DJ2=-DJ1-DJ3
 
       AJ(I,J)=DJ1
@@ -3143,7 +3231,7 @@ C-----Y-DIRECTION
       CALL TRDIAG2(AJ,BJ,CJ,GJ,GJ,1,N2M,IBG,N1M)
       ENDIF
 
-C-----X-DIRECTION
+!C-----X-DIRECTION
       DO 51 J=1,N2M
       DO 51 I=IBG,N1M
 
@@ -3183,9 +3271,9 @@ C-----X-DIRECTION
       RETURN
       END
 
-C******************************************************************
+!C******************************************************************
       SUBROUTINE LHSV(RHS1,U,V,W,DF_Y,VF_Y,DENF_YI)
-C******************************************************************
+!C******************************************************************
       USE PARAM_VAR
       
       USE FLOW_VAR
@@ -3193,23 +3281,23 @@ C******************************************************************
 
       IMPLICIT NONE
 
-      REAL RHS1(M1M,M2M,M3M,3)
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 RHS1(M1M,M2M,M3M,3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
 
-      REAL DF_Y(0:M1,0:M2,0:M3,3),VF_Y(0:M1,0:M2,0:M3,3)
-      REAL DENF_YI(0:M1,0:M2,0:M3)
+      REAL*8 DF_Y(0:M1,0:M2,0:M3,3),VF_Y(0:M1,0:M2,0:M3,3)
+      REAL*8 DENF_YI(0:M1,0:M2,0:M3)
 
-      real, dimension (:,:), allocatable :: AI,BI,CI,GI
-      real, dimension (:,:), allocatable :: AJ,BJ,CJ,GJ
-      real, dimension (:,:), allocatable :: AK,BK,CK,GK
+      REAL*8, dimension (:,:), allocatable :: AI,BI,CI,GI
+      REAL*8, dimension (:,:), allocatable :: AJ,BJ,CJ,GJ
+      REAL*8, dimension (:,:), allocatable :: AK,BK,CK,GK
 
-      INTEGER I,J,K
-      REAL DI1,DI2,DI3,DJ1,DJ2,DJ3,DK1,DK2,DK3
+      INTEGER*8 I,J,K
+      REAL*8 DI1,DI2,DI3,DJ1,DJ2,DJ3,DK1,DK2,DK3
       
-C=====ADI STARTS
+!C=====ADI STARTS
 
       IF (N3M.EQ.1) GOTO 100
-C-----Z-DIRECTION
+!C-----Z-DIRECTION
 !$OMP PARALLEL private(I,K,DK1,DK2,DK3)
 !$OMP&private(AK,CK,BK,GK)
       allocate(AK(M1,M3),BK(M1,M3),CK(M1,M3),GK(M1,M3))
@@ -3218,11 +3306,14 @@ C-----Z-DIRECTION
 
       DO 141 K=1,N3M
       DO 141 I=1,N1M
-
-!      DK1=ACOEF*DENF_YI(I,J,K)*VF_Y(I,J,KMV(K),3)*AKUV(K)*(1.-FIXKL(K))  !NEUMANN
-!      DK3=ACOEF*DENF_YI(I,J,K)*VF_Y(I,J,K,3)*CKUV(K)*(1.-FIXKU(K))
+      
+      if (ipz .eq. 0) then 
+      DK1=ACOEF*DENF_YI(I,J,K)*VF_Y(I,J,KMV(K),3)*AKUV(K)*(1.-FIXKL(K))  !NEUMANN
+      DK3=ACOEF*DENF_YI(I,J,K)*VF_Y(I,J,K,3)*CKUV(K)*(1.-FIXKU(K))
+      elseif (ipz .eq. 1) then 
       DK1=ACOEF*DENF_YI(I,J,K)*VF_Y(I,J,KMV(K),3)*AKUV(K)  !PERIODIC
       DK3=ACOEF*DENF_YI(I,J,K)*VF_Y(I,J,K,3)*CKUV(K)
+      endif
       DK2=-DK1-DK3
 
       AK(I,K)=DK1
@@ -3258,7 +3349,7 @@ C-----Z-DIRECTION
 !$OMP DO
       DO 40 K=1,N3M
 
-C-----Y-DIRECTION
+!C-----Y-DIRECTION
       DO 91 J=JBG,N2M
       DO 91 I=1,N1M
 
@@ -3283,14 +3374,16 @@ C-----Y-DIRECTION
        CALL TRDIAG2(AJ,BJ,CJ,GJ,GJ,JBG,N2M,1,N1M)
       ENDIF
 
-C-----X-DIRECTION
+!C-----X-DIRECTION
       DO 51 J=JBG,N2M
       DO 51 I=1,N1M
-
-!      DI1=ACOEF*DENF_YI(I,J,K)*VF_Y(IMV(I),J,K,1)*AIVW(I)*(1.-FIXIL(I)) !NEUMANN
-!      DI3=ACOEF*DENF_YI(I,J,K)*VF_Y(I,J,K,1)*CIVW(I)*(1.-FIXIU(I))
-      DI1=ACOEF*DENF_YI(I,J,K)*VF_Y(IMV(I),J,K,1)*AIVW(I)  !PERIODIC
-      DI3=ACOEF*DENF_YI(I,J,K)*VF_Y(I,J,K,1)*CIVW(I)
+       if (ipx .eq. 0) then
+       DI1=ACOEF*DENF_YI(I,J,K)*VF_Y(IMV(I),J,K,1)*AIVW(I)*(1.-FIXIL(I)) !NEUMANN
+       DI3=ACOEF*DENF_YI(I,J,K)*VF_Y(I,J,K,1)*CIVW(I)*(1.-FIXIU(I))
+       elseif (ipx .eq. 1) then 
+       DI1=ACOEF*DENF_YI(I,J,K)*VF_Y(IMV(I),J,K,1)*AIVW(I)  !PERIODIC
+       DI3=ACOEF*DENF_YI(I,J,K)*VF_Y(I,J,K,1)*CIVW(I)
+       endif
       DI2=-DI1-DI3
 
       AI(J,I)=DI1
@@ -3324,9 +3417,9 @@ C-----X-DIRECTION
       RETURN
       END
 
-C******************************************************************
+!C******************************************************************
       SUBROUTINE LHSW(RHS1,U,V,W,DF_Z,VF_Z,DENF_ZI)
-C******************************************************************
+!C******************************************************************
       USE PARAM_VAR
       
       USE FLOW_VAR
@@ -3334,20 +3427,20 @@ C******************************************************************
 
       IMPLICIT NONE
 
-      REAL RHS1(M1M,M2M,M3M,3)
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 RHS1(M1M,M2M,M3M,3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
 
-      REAL DF_Z(0:M1,0:M2,0:M3,3),VF_Z(0:M1,0:M2,0:M3,3)
-      REAL DENF_ZI(0:M1,0:M2,0:M3)
+      REAL*8 DF_Z(0:M1,0:M2,0:M3,3),VF_Z(0:M1,0:M2,0:M3,3)
+      REAL*8 DENF_ZI(0:M1,0:M2,0:M3)
 
-      real, dimension (:,:), allocatable :: AI,BI,CI,GI
-      real, dimension (:,:), allocatable :: AJ,BJ,CJ,GJ
-      real, dimension (:,:), allocatable :: AK,BK,CK,GK
+      REAL*8, dimension (:,:), allocatable :: AI,BI,CI,GI
+      REAL*8, dimension (:,:), allocatable :: AJ,BJ,CJ,GJ
+      REAL*8, dimension (:,:), allocatable :: AK,BK,CK,GK
       
-      INTEGER I,J,K
-      REAL DI1,DI2,DI3,DJ1,DJ2,DJ3,DK1,DK2,DK3
+      INTEGER*8 I,J,K
+      REAL*8 DI1,DI2,DI3,DJ1,DJ2,DJ3,DK1,DK2,DK3
  
-C-----Z-DIRECTION
+!C-----Z-DIRECTION
 !$OMP PARALLEL private(I,K,DK1,DK2,DK3)
 !$OMP&private(AK,CK,BK,GK)
       allocate(AK(M1,M3),BK(M1,M3),CK(M1,M3),GK(M1,M3))
@@ -3389,14 +3482,16 @@ C-----Z-DIRECTION
 !$OMP DO
       DO 40 K=KBG,N3M
 
-C-----Y-DIRECTION
+!C-----Y-DIRECTION
       DO 91 J=1,N2M
       DO 91 I=1,N1M
-
-!      DJ1=ACOEF*DENF_ZI(I,J,K)*VF_Z(I,JMV(J),K,2)*AJUW(J)*(1.-FIXJL(J))  !NEUMANN
-!      DJ3=ACOEF*DENF_ZI(I,J,K)*VF_Z(I,J,K,2)*CJUW(J)*(1.-FIXJU(J))
-      DJ1=ACOEF*DENF_ZI(I,J,K)*VF_Z(I,JMV(J),K,2)*AJUW(J) !PERIODIC
-      DJ3=ACOEF*DENF_ZI(I,J,K)*VF_Z(I,J,K,2)*CJUW(J)
+       if (ipy .eq. 0) then 
+       DJ1=ACOEF*DENF_ZI(I,J,K)*VF_Z(I,JMV(J),K,2)*AJUW(J)*(1.-FIXJL(J))  !NEUMANN
+       DJ3=ACOEF*DENF_ZI(I,J,K)*VF_Z(I,J,K,2)*CJUW(J)*(1.-FIXJU(J))
+       elseif (ipy .eq. 1) then
+       DJ1=ACOEF*DENF_ZI(I,J,K)*VF_Z(I,JMV(J),K,2)*AJUW(J) !PERIODIC
+       DJ3=ACOEF*DENF_ZI(I,J,K)*VF_Z(I,J,K,2)*CJUW(J)
+       endif
       DJ2=-DJ1-DJ3
 
       AJ(I,J)=DJ1
@@ -3416,14 +3511,16 @@ C-----Y-DIRECTION
        CALL TRDIAG2(AJ,BJ,CJ,GJ,GJ,1,N2M,1,N1M)
       ENDIF
 
-C-----X-DIRECTION
+!C-----X-DIRECTION
       DO 51 J=1,N2M
       DO 51 I=1,N1M
-
-!      DI1=ACOEF*VF_Z(IMV(I),J,K,1)*DENF_ZI(I,J,K)*AIVW(I)*(1.-FIXIL(I))  !NEUMANN
-!      DI3=ACOEF*VF_Z(I,J,K,1)*DENF_ZI(I,J,K)*CIVW(I)*(1.-FIXIU(I))
-      DI1=ACOEF*VF_Z(IMV(I),J,K,1)*DENF_ZI(I,J,K)*AIVW(I) !PERIODIC
-      DI3=ACOEF*VF_Z(I,J,K,1)*DENF_ZI(I,J,K)*CIVW(I)
+      if (ipx .eq. 0) then
+       DI1=ACOEF*VF_Z(IMV(I),J,K,1)*DENF_ZI(I,J,K)*AIVW(I)*(1.-FIXIL(I))  !NEUMANN
+       DI3=ACOEF*VF_Z(I,J,K,1)*DENF_ZI(I,J,K)*CIVW(I)*(1.-FIXIU(I))
+      elseif (ipx .eq. 1) then 
+       DI1=ACOEF*VF_Z(IMV(I),J,K,1)*DENF_ZI(I,J,K)*AIVW(I) !PERIODIC
+       DI3=ACOEF*VF_Z(I,J,K,1)*DENF_ZI(I,J,K)*CIVW(I)
+      endif
       DI2=-DI1-DI3
 
       AI(J,I)=DI1
@@ -3457,9 +3554,9 @@ C-----X-DIRECTION
       RETURN
       END
 
-C******************************************************************
+!C******************************************************************
       SUBROUTINE BC(RHS1,U,V,W)
-C******************************************************************
+!C******************************************************************
       USE FLOW_VAR
 
       USE PARAM_VAR
@@ -3467,12 +3564,12 @@ C******************************************************************
       
       IMPLICIT NONE
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
 
-      REAL RHS1(M1M,M2M,M3M,3)
+      REAL*8 RHS1(M1M,M2M,M3M,3)
       
-      INTEGER I,J,K
-      REAL UBC_AVG,Q_NP,AA
+      INTEGER*8 I,J,K
+      REAL*8 UBC_AVG,Q_NP,AA
       
 !       CALL BC_FLUX(Q_N,AA,U,V,W)        !CALCULATE MASS FLUX AT THE BOUNDARY AT N-STEP.
 
@@ -3576,9 +3673,9 @@ C******************************************************************
       RETURN
       END
 
-C******************************************************************
+!******************************************************************
       SUBROUTINE BC_FLUX(QQ,AA,U,V,W)
-C******************************************************************
+!******************************************************************
       USE FLOW_VAR
 
       USE PARAM_VAR
@@ -3588,12 +3685,12 @@ C******************************************************************
       
       IMPLICIT NONE
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
 
-      REAL QQ,AA
+      REAL*8 QQ,AA
       
-      INTEGER I,J,K
-      REAL QQ1,QQ2,QQ3,Q_IBM
+      INTEGER*8 I,J,K
+      REAL*8 QQ1,QQ2,QQ3,Q_IBM
 
       !OUTWARD IS POSITIVE.
         QQ1=0.
@@ -3633,7 +3730,7 @@ C******************************************************************
 
       Q_IBM=0.
       IF (IBMON.EQ.1) THEN
-C-----MASS FLUX OF ACTUATION
+!C-----MASS FLUX OF ACTUATION
 !$OMP PARALLEL DO private(I,J)
 !$OMP&reduction(+:Q_IBM)
       DO K=1,N3M
@@ -3651,10 +3748,10 @@ C-----MASS FLUX OF ACTUATION
       END
 
 
-C*******************************************************************
+!C*******************************************************************
       SUBROUTINE LHSINIT
-C*******************************************************************
-C     CALCULATE COEFFICIENTS FOR LHS
+!C*******************************************************************
+!C     CALCULATE COEFFICIENTS FOR LHS
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
       
@@ -3662,7 +3759,7 @@ C     CALCULATE COEFFICIENTS FOR LHS
       
       IMPLICIT NONE
       
-      INTEGER IC,IM,IP,JC,JM,JP,KC,KM,KP
+      INTEGER*8 IC,IM,IP,JC,JM,JP,KC,KM,KP
 
 !$OMP PARALLEL DO private(IM)
       DO 10 IC=IBG,N1M
@@ -3709,56 +3806,55 @@ C     CALCULATE COEFFICIENTS FOR LHS
       RETURN
       END
       
-C=======================CONTINUITY EQUATION============================C
-C      CAL. TWO-PHASE CONTINUITY EQUATION                              C
-C                                                                      C
-C      FLUX IS CALCULATED AT REFINED LEVEL-SET GRID                    C
-C      MASS-REDISTRIBUTION ALGORITHM IS IMPLEMETAION                   C
-C      (D.KIM STANFORD THESIS 2011)                                    C
-C                                                                      C
-C                                            KIYOUNG KIM 2015.3.18     C
-C=======================CONTINUITY EQUATION============================C
-C =====================================================================
-      SUBROUTINE CAL_CONTINUITY(ITRACKING,DF_X,DF_Y,DF_Z,DF_C
+!C=======================CONTINUITY EQUATION============================C
+!C      CAL. TWO-PHASE CONTINUITY EQUATION                              C
+!C                                                                      C
+!C      FLUX IS CALCULATED AT REFINED LEVEL-SET GRID                    C
+!C      MASS-REDISTRIBUTION ALGORITHM IS IMPLEMETAION                   C
+!C      (D.KIM STANFORD THESIS 2011)                                    C
+!C                                                                      C
+!C                                            KIYOUNG KIM 2015.3.18     C
+!C=======================CONTINUITY EQUATION============================C
+!C =====================================================================
+      SUBROUTINE CAL_CONTINUITY(DF_X,DF_Y,DF_Z,DF_C
      &,VF_X,VF_Y,VF_Z,U,V,W,PSI_XN,PSI_YN,PSI_ZN,PSI_CN
      &,PSI_X,PSI_Y,PSI_Z,PSI_C)
-C =====================================================================
+!C =====================================================================
       USE FLOW_VAR
       USE TWO_PHASE_PROPERTY
 
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
       
-      USE LES_VAR
+      ! USE LES_VAR
       
       IMPLICIT NONE
       
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
 
-      REAL PSI_XN(0:M1,0:M2,0:M3)
-      REAL PSI_YN(0:M1,0:M2,0:M3)
-      REAL PSI_ZN(0:M1,0:M2,0:M3)
-      REAL PSI_CN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_XN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_YN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_ZN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_CN(0:M1,0:M2,0:M3)
       
-      REAL DF_X(0:M1,0:M2,0:M3,3),VF_X(0:M1,0:M2,0:M3,3)
-      REAL DF_Y(0:M1,0:M2,0:M3,3),VF_Y(0:M1,0:M2,0:M3,3)
-      REAL DF_Z(0:M1,0:M2,0:M3,3),VF_Z(0:M1,0:M2,0:M3,3)
-      REAL DF_C(0:M1,0:M2,0:M3,3)
-      INTEGER REGION(-1:M1+1,-1:M2+1,-1:M3+1)
+      REAL*8 DF_X(0:M1,0:M2,0:M3,3),VF_X(0:M1,0:M2,0:M3,3)
+      REAL*8 DF_Y(0:M1,0:M2,0:M3,3),VF_Y(0:M1,0:M2,0:M3,3)
+      REAL*8 DF_Z(0:M1,0:M2,0:M3,3),VF_Z(0:M1,0:M2,0:M3,3)
+      REAL*8 DF_C(0:M1,0:M2,0:M3,3)
+      INTEGER*8 REGION(-1:M1+1,-1:M2+1,-1:M3+1)
 
-      REAL PSI_X(0:M1,0:M2,0:M3),PSI_Y(0:M1,0:M2,0:M3)
+      REAL*8 PSI_X(0:M1,0:M2,0:M3),PSI_Y(0:M1,0:M2,0:M3)
      &                     ,PSI_Z(0:M1,0:M2,0:M3),PSI_C(0:M1,0:M2,0:M3)
      
-      INTEGER ITRACKING
       
-      INTEGER I,J,K,II,JJ,KK,I2,J2,K2
-      REAL DT_CON
+      INTEGER*8 I,J,K,II,JJ,KK,I2,J2,K2
+      REAL*8 DT_CON
       
       IF ((DENM .NE. DENP) .OR. (VISM .NE. VISP) ) THEN
-C=====!DEVIDE CAL. REGION FOR EFFICIENT CALCULATION
-      !BUT IF INTERFACE IS EXACTLY AT CELL-INTERFACE, THIS CAN BE PROBLEM
-      !BECAUSE PSI_CN(I,J,K) CAN NOT HAVE THE VALUE BETWEEN 0 AND 1.
-      !SO, INITIAL FIELD TAHT EXACTLY LAID CELL-FACE SHOULD BE AVOIDED.
+!C=====!DEVIDE CAL. REGION FOR EFFICIENT CALCULATION
+      !BUT IF INTERFACE IS EXACTLY AT CELL-INTERFACE, THIS CAN BE A PROBLEM
+      !BECAUSE PSI_CN(I,J,K) CAN NOT HAVE A VALUE BETWEEN 0 AND 1.
+      !SO, INITIAL FIELD THAT EXACTLY LAID CELL-FACE SHOULD BE AVOIDED.
       !OTHERWISE, THIS ALGORITHM HAVE TO BE REVISED!
 
 !$OMP PARALLEL DO private(I,J)
@@ -3770,14 +3866,14 @@ C=====!DEVIDE CAL. REGION FOR EFFICIENT CALCULATION
       ENDDO
       ENDDO
 
-C-----DEVIDE REGION WITH GRADIENT
+!C-----DEVIDE REGION WITH GRADIENT
       IF ( N3M .EQ. 1 ) THEN  !2D
       K=1
 !$OMP PARALLEL DO private(I,II,JJ,I2,J2)
        DO J=1,N2M
        DO I=1,N1M
-        IF (   ( PSI_CN(IPV(I),J,K)-PSI_CN(I,J,K) .NE. 0.)      !THIS SHOULD BE EVALUATED FIRST THAN
-     &    .OR. ( PSI_CN(I,J,K)-PSI_CN(IMV(I),J,K) .NE. 0.)  !BELOW 'ELSE IF' SENTANCE!!
+        IF (   ( PSI_CN(IPV(I),J,K)-PSI_CN(I,J,K) .NE. 0.)  !THIS SHOULD BE EVALUATED FIRST THAN
+     &    .OR. ( PSI_CN(I,J,K)-PSI_CN(IMV(I),J,K) .NE. 0.)  !BELOW 'ELSE IF' SENTENCE!!
      &    .OR. ( PSI_CN(I,JPV(J),K)-PSI_CN(I,J,K) .NE. 0.)
      &    .OR. ( PSI_CN(I,J,K)-PSI_CN(I,JMV(J),K) .NE. 0.) ) THEN
          DO J2=J-2,J+2
@@ -3846,7 +3942,7 @@ C-----DEVIDE REGION WITH GRADIENT
       ENDIF !      IF ((DENM .NE. DENP) .OR. (VISM .NE. VISP) ) THEN
 
 !C-----CONTINUITY SOLVER
-      IF ( DENR .EQ. 1. ) THEN  !NEED NOT TO SOLVE CONTINUITY EQN.
+      IF ( DENR .EQ. 1. ) THEN  !NEED NOT SOLVE CONTINUITY EQN.
 
 !       IF ( M .EQ. 1 ) THEN !NEED ONLY INITIAL STEP
 !$OMP PARALLEL DO private(I,J)
@@ -3918,34 +4014,34 @@ C-----DEVIDE REGION WITH GRADIENT
        ELSE !denr .ne. 1
 
          DT_CON=0.05*DTCONST
-      CALL CONTI_X(ITRACKING,REGION,DF_X,VF_X,PSI_X,DT_CON,U,V,W,PSI_XN)
-      CALL CONTI_Y(ITRACKING,REGION,DF_Y,VF_Y,PSI_Y,DT_CON,U,V,W,PSI_YN)
-      IF(N3M.NE.1)CALL CONTI_Z(ITRACKING,REGION,DF_Z,VF_Z,PSI_Z,DT_CON
+      CALL CONTI_X(REGION,DF_X,VF_X,PSI_X,DT_CON,U,V,W,PSI_XN)
+      CALL CONTI_Y(REGION,DF_Y,VF_Y,PSI_Y,DT_CON,U,V,W,PSI_YN)
+      IF(N3M.NE.1)CALL CONTI_Z(REGION,DF_Z,VF_Z,PSI_Z,DT_CON
      &,U,V,W,PSI_ZN)
-       CALL CONTI_C(ITRACKING,REGION,DF_C,PSI_C,DT_CON,U,V,W
+      CALL CONTI_C(REGION,DF_C,PSI_C,DT_CON,U,V,W
      &,PSI_XN,PSI_YN,PSI_ZN,PSI_CN) !FOR MULTIGRID AT POISSON
       ENDIF
 
-       IF (ILES .EQ. 1) THEN
-!$OMP PARALLEL DO private(I,J)
-        DO K=1,N3M
-        DO J=1,N2M
-        DO I=1,N1M
-          VF_X(I,J,K,1)=VF_X(I,J,K,1)+TNU(I,J,K)
-          VF_X(I,J,K,2)=VF_X(I,J,K,2)+TNU(I,J,K)
-          VF_X(I,J,K,3)=VF_X(I,J,K,3)+TNU(I,J,K)
+       ! IF (ILES .EQ. 1) THEN
+! !$OMP PARALLEL DO private(I,J)
+        ! DO K=1,N3M
+        ! DO J=1,N2M
+        ! DO I=1,N1M
+          ! VF_X(I,J,K,1)=VF_X(I,J,K,1)+TNU(I,J,K)
+          ! VF_X(I,J,K,2)=VF_X(I,J,K,2)+TNU(I,J,K)
+          ! VF_X(I,J,K,3)=VF_X(I,J,K,3)+TNU(I,J,K)
 
-          VF_Y(I,J,K,1)=VF_Y(I,J,K,1)+TNU(I,J,K)
-          VF_Y(I,J,K,2)=VF_Y(I,J,K,2)+TNU(I,J,K)
-          VF_Y(I,J,K,3)=VF_Y(I,J,K,3)+TNU(I,J,K)
+          ! VF_Y(I,J,K,1)=VF_Y(I,J,K,1)+TNU(I,J,K)
+          ! VF_Y(I,J,K,2)=VF_Y(I,J,K,2)+TNU(I,J,K)
+          ! VF_Y(I,J,K,3)=VF_Y(I,J,K,3)+TNU(I,J,K)
 
-          VF_Z(I,J,K,1)=VF_Z(I,J,K,1)+TNU(I,J,K)
-          VF_Z(I,J,K,2)=VF_Z(I,J,K,2)+TNU(I,J,K)
-          VF_Z(I,J,K,3)=VF_Z(I,J,K,3)+TNU(I,J,K)
-        ENDDO
-        ENDDO
-        ENDDO
-       ENDIF
+          ! VF_Z(I,J,K,1)=VF_Z(I,J,K,1)+TNU(I,J,K)
+          ! VF_Z(I,J,K,2)=VF_Z(I,J,K,2)+TNU(I,J,K)
+          ! VF_Z(I,J,K,3)=VF_Z(I,J,K,3)+TNU(I,J,K)
+        ! ENDDO
+        ! ENDDO
+        ! ENDDO
+       ! ENDIF
          
       RETURN
       END
@@ -4115,10 +4211,10 @@ C =====================================================================
       RETURN
       END
 
-C =====================================================================
-      SUBROUTINE CONTI_X(ITRACKING,REGION,DF_X,VF_X,PSI_X,DT_CON,U,V,W
+!C =====================================================================
+      SUBROUTINE CONTI_X(REGION,DF_X,VF_X,PSI_X,DT_CON,U,V,W
      &,PSI_XN)
-C =====================================================================
+!C =====================================================================
       USE FLOW_VAR
       USE TWO_PHASE_PROPERTY
       
@@ -4127,25 +4223,24 @@ C =====================================================================
       
       IMPLICIT NONE
       
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
 
-      REAL PSI_XN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_XN(0:M1,0:M2,0:M3)
 
-      REAL DFX(0:M1,0:M2,0:M3),DFY(0:M1,0:M2,0:M3),DFZ(0:M1,0:M2,0:M3)
-      REAL EPS(0:M1,0:M2,0:M3),EPS_OLD(0:M1,0:M2,0:M3)
-      INTEGER PSI_ITERATION,STEADY_EPS
+      REAL*8 DFX(0:M1,0:M2,0:M3),DFY(0:M1,0:M2,0:M3),DFZ(0:M1,0:M2,0:M3)
+      REAL*8 EPS(0:M1,0:M2,0:M3),EPS_OLD(0:M1,0:M2,0:M3)
+      INTEGER*8 PSI_ITERATION,STEADY_EPS
       
-      INTEGER REGION(-1:M1+1,-1:M2+1,-1:M3+1)
-      REAL DF_X(0:M1,0:M2,0:M3,3),VF_X(0:M1,0:M2,0:M3,3)
-      REAL PSI_X(0:M1,0:M2,0:M3)
-      REAL TAUC(3,2)
+      INTEGER*8 REGION(-1:M1+1,-1:M2+1,-1:M3+1)
+      REAL*8 DF_X(0:M1,0:M2,0:M3,3),VF_X(0:M1,0:M2,0:M3,3)
+      REAL*8 PSI_X(0:M1,0:M2,0:M3)
+      REAL*8 TAUC(3,2)
       
-      INTEGER ITRACKING
-      REAL DT_CON
+      REAL*8 DT_CON
       
-      INTEGER I,J,K,IP1,IM1,JP1,JM1,KP1,KM1
-      REAL UE,UW,VN,VS,WT,WB
-      REAL PSI_SUM,FLUX_X,FLUX_Y,FLUX_Z,DEN_XN,DEN_X
+      INTEGER*8 I,J,K,IP1,IM1,JP1,JM1,KP1,KM1
+      REAL*8 UE,UW,VN,VS,WT,WB
+      REAL*8 PSI_SUM,FLUX_X,FLUX_Y,FLUX_Z,DEN_XN,DEN_X
       
 !$OMP PARALLEL DO private(I,J)
        DO K=0,N3
@@ -4162,7 +4257,7 @@ C =====================================================================
       !MODIFIED VERSION OF
       !'A LEVEL SET BASED METHOD FOR CALCULATING FLUX DENSITIES IN
       !TWO-PHASE FLOWS - Raessi(CTR,2008)'
-      !SOLVE WHOLE DOMAIN FOR MASS CONSERCATION.
+      !SOLVE WHOLE DOMAIN FOR MASS CONSERVATION.
       !IF SOLVE IN THE REGION 2, MASS CAN BE NOT CONSERVED BECAUSE OF NUMERICAL ERROR.
 !$OMP PARALLEL DO private(I,J,IP1,IM1,JP1,JM1,KP1,KM1,UE,UW,VN,VS,WT,WB)
 !$OMP&private(PSI_SUM,FLUX_X,FLUX_Y,FLUX_Z,DEN_XN,DEN_X)
@@ -4241,7 +4336,7 @@ C =====================================================================
 !       VF_X(I,J,KM1,3)=VISM+VIS_DIFF*PSI6
 
       IF ( DF_X(I,J,K,1) .EQ. 0. ) THEN
-       IF (ABS(UE) .LE. 1.E-8) THEN
+       IF (DABS(UE) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_XN(I,J,K)+PSI_XN(IP1,J,K))
        ELSE
         CALL PSIFACE_X(I,J,K,UE,PSI_SUM,1)
@@ -4250,7 +4345,7 @@ C =====================================================================
         DF_X(I,J,K,1)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_X(IM1,J,K,1) .EQ. 0. ) THEN
-       IF (ABS(UW) .LE. 1.E-8) THEN
+       IF (DABS(UW) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_XN(I,J,K)+PSI_XN(IM1,J,K))
        ELSE
         CALL PSIFACE_X(IM1,J,K,UW,PSI_SUM,1)
@@ -4259,7 +4354,7 @@ C =====================================================================
         DF_X(IM1,J,K,1)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_X(I,J,K,2) .EQ. 0. ) THEN
-       IF (ABS(VN) .LE. 1.E-8) THEN
+       IF (DABS(VN) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_XN(I,J,K)*SDY(JP1)
      &                             +PSI_XN(I,JP1,K)*SDY(J))*VVDY(JP1)
        ELSE
@@ -4269,7 +4364,7 @@ C =====================================================================
         DF_X(I,J,K,2)=DENM+DEN_DIFF*PSI_SUM
        ENDIF
       IF ( DF_X(I,JM1,K,2) .EQ. 0. ) THEN
-       IF (ABS(VS) .LE. 1.E-8) THEN
+       IF (DABS(VS) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_XN(I,JM1,K)*SDY(J)
      &                             +PSI_XN(I,J,K)*SDY(JM1))*VVDY(J)
        ELSE
@@ -4279,7 +4374,7 @@ C =====================================================================
         DF_X(I,JM1,K,2)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_X(I,J,K,3) .EQ. 0. ) THEN
-       IF (ABS(WT) .LE. 1.E-8) THEN
+       IF (DABS(WT) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_XN(I,J,K)*SDZ(KP1)
      &                             +PSI_XN(I,J,KP1)*SDZ(K))*VVDZ(KP1)
        ELSE
@@ -4289,7 +4384,7 @@ C =====================================================================
         DF_X(I,J,K,3)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_X(I,J,KM1,3) .EQ. 0. ) THEN
-       IF (ABS(WB) .LE. 1.E-8) THEN
+       IF (DABS(WB) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_XN(I,J,KM1)*SDZ(K)
      &                             +PSI_XN(I,J,K)*SDZ(KM1))*VVDZ(K)
        ELSE
@@ -4313,7 +4408,7 @@ C =====================================================================
        ENDDO
        
        !INSTEAD OF MASS REDISTRIBUTION, SIMPLY REMOVE THE ERROR.
-       !SHOULD REVISITE HERE.
+       !SHOULD REVISIT HERE.
 !$OMP PARALLEL DO private(I,J)
        DO K=1,N3M
        DO J=1,N2M
@@ -4327,7 +4422,7 @@ C =====================================================================
        ENDDO
        ENDDO
        
-C-----CONTINUITY BOUNDARY CONDITION : NEUMAN+PERIODIC CONDITION.
+!C-----CONTINUITY BOUNDARY CONDITION : NEUMANN+PERIODIC CONDITION.
       IF ( IPX .NE. 1 ) THEN
 !$OMP PARALLEL DO private(J)
        DO K=1,N3M
@@ -4356,7 +4451,7 @@ C-----CONTINUITY BOUNDARY CONDITION : NEUMAN+PERIODIC CONDITION.
       ENDDO
       ENDDO
       ENDIF
-C-----CONTINUITY BOUNDARY CONDITION : NEUMAN+PERIODIC CONDITION.
+!C-----CONTINUITY BOUNDARY CONDITION : NEUMANN+PERIODIC CONDITION.
 
 !        CRI1=1.E-4
 !        CRI2=1.-CRI1
@@ -4601,10 +4696,10 @@ C-----CONTINUITY BOUNDARY CONDITION : NEUMAN+PERIODIC CONDITION.
        RETURN
        END
 
-C =====================================================================
-      SUBROUTINE CONTI_Y(ITRACKING,REGION,DF_Y,VF_Y,PSI_Y,DT_CON,U,V,W
+!C =====================================================================
+      SUBROUTINE CONTI_Y(REGION,DF_Y,VF_Y,PSI_Y,DT_CON,U,V,W
      &,PSI_YN)
-C =====================================================================
+!C =====================================================================
       USE FLOW_VAR
       USE TWO_PHASE_PROPERTY
 
@@ -4613,25 +4708,25 @@ C =====================================================================
       
       IMPLICIT NONE
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
 
-      REAL PSI_YN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_YN(0:M1,0:M2,0:M3)
 
-      REAL DFX(0:M1,0:M2,0:M3),DFY(0:M1,0:M2,0:M3),DFZ(0:M1,0:M2,0:M3)
-      REAL EPS(0:M1,0:M2,0:M3),EPS_OLD(0:M1,0:M2,0:M3)
-      INTEGER PSI_ITERATION,STEADY_EPS
+      REAL*8 DFX(0:M1,0:M2,0:M3),DFY(0:M1,0:M2,0:M3),DFZ(0:M1,0:M2,0:M3)
+      REAL*8 EPS(0:M1,0:M2,0:M3),EPS_OLD(0:M1,0:M2,0:M3)
+      INTEGER*8 PSI_ITERATION,STEADY_EPS
 
-      INTEGER REGION(-1:M1+1,-1:M2+1,-1:M3+1)
-      REAL DF_Y(0:M1,0:M2,0:M3,3),VF_Y(0:M1,0:M2,0:M3,3)
-      REAL PSI_Y(0:M1,0:M2,0:M3)
-      REAL TAUC(3,2)
+      INTEGER*8 REGION(-1:M1+1,-1:M2+1,-1:M3+1)
+      REAL*8 DF_Y(0:M1,0:M2,0:M3,3),VF_Y(0:M1,0:M2,0:M3,3)
+      REAL*8 PSI_Y(0:M1,0:M2,0:M3)
+      REAL*8 TAUC(3,2)
 
-      INTEGER ITRACKING
-      REAL DT_CON
+
+      REAL*8 DT_CON
       
-      INTEGER I,J,K,IP1,IM1,JP1,JM1,KP1,KM1
-      REAL UE,UW,VN,VS,WT,WB
-      REAL PSI_SUM,FLUX_X,FLUX_Y,FLUX_Z,DEN_YN,DEN_Y
+      INTEGER*8 I,J,K,IP1,IM1,JP1,JM1,KP1,KM1
+      REAL*8 UE,UW,VN,VS,WT,WB
+      REAL*8 PSI_SUM,FLUX_X,FLUX_Y,FLUX_Z,DEN_YN,DEN_Y
       
 !$OMP PARALLEL DO private(I,J)
        DO K=0,N3
@@ -4722,7 +4817,7 @@ C =====================================================================
 !      VF_Y(I,J,KM1,3)=VISM+VIS_DIFF*PSI6
 
       IF ( DF_Y(I,J,K,1) .EQ. 0. ) THEN
-       IF (ABS(UE) .LE. 1.E-8) THEN
+       IF (DABS(UE) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_YN(I,J,K)*SDX(IP1)
      &                              +PSI_YN(IP1,J,K)*SDX(I))*VVDX(IP1)
        ELSE
@@ -4732,7 +4827,7 @@ C =====================================================================
         DF_Y(I,J,K,1)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_Y(IM1,J,K,1) .EQ. 0. ) THEN
-       IF (ABS(UW) .LE. 1.E-8) THEN
+       IF (DABS(UW) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_YN(IM1,J,K)*SDX(I)
      &                              +PSI_YN(I,J,K)*SDX(IM1))*VVDX(I)
        ELSE
@@ -4742,7 +4837,7 @@ C =====================================================================
         DF_Y(IM1,J,K,1)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_Y(I,J,K,2) .EQ. 0. ) THEN
-       IF (ABS(VN) .LE. 1.E-8) THEN
+       IF (DABS(VN) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(V(I,JP1,K)+V(I,J,K))
        ELSE
         CALL PSIFACE_Y(I,J,K,VN,PSI_SUM,2)
@@ -4751,7 +4846,7 @@ C =====================================================================
         DF_Y(I,J,K,2)=DENM+DEN_DIFF*PSI_SUM
        ENDIF
       IF ( DF_Y(I,JM1,K,2) .EQ. 0. ) THEN
-       IF (ABS(VS) .LE. 1.E-8) THEN
+       IF (DABS(VS) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_YN(I,J,K)+PSI_YN(I,JM1,K))
        ELSE
         CALL PSIFACE_Y(I,JM1,K,VS,PSI_SUM,2)
@@ -4760,7 +4855,7 @@ C =====================================================================
         DF_Y(I,JM1,K,2)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_Y(I,J,K,3) .EQ. 0. ) THEN
-       IF (ABS(WT) .LE. 1.E-8) THEN
+       IF (DABS(WT) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_YN(I,J,K)*SDZ(KP1)
      &                              +PSI_YN(I,J,KP1)*SDZ(K))*VVDZ(KP1)
        ELSE
@@ -4770,7 +4865,7 @@ C =====================================================================
         DF_Y(I,J,K,3)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_Y(I,J,KM1,3) .EQ. 0. ) THEN
-       IF (ABS(WB) .LE. 1.E-8) THEN
+       IF (DABS(WB) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_YN(I,J,KM1)*SDZ(K)
      &                              +PSI_YN(I,J,K)*SDZ(KM1))*VVDZ(K)
        ELSE
@@ -4806,7 +4901,7 @@ C =====================================================================
        ENDDO
        ENDDO
 
-C-----CONTINUITY BOUNDARY CONDITION : NEUMAN+PERIODIC CONDITION.
+!C-----CONTINUITY BOUNDARY CONDITION : NEUMAN+PERIODIC CONDITION.
       IF ( IPX .NE. 1 ) THEN
 !$OMP PARALLEL DO private(J)
        DO K=1,N3M
@@ -5075,10 +5170,10 @@ C-----CONTINUITY BOUNDARY CONDITION : NEUMAN+PERIODIC CONDITION.
        RETURN
        END
 
-C =====================================================================
-      SUBROUTINE CONTI_Z(ITRACKING,REGION,DF_Z,VF_Z,PSI_Z,DT_CON,U,V,W
+!C =====================================================================
+      SUBROUTINE CONTI_Z(REGION,DF_Z,VF_Z,PSI_Z,DT_CON,U,V,W
      &,PSI_ZN)
-C =====================================================================
+!C =====================================================================
       USE FLOW_VAR
       USE TWO_PHASE_PROPERTY
 
@@ -5087,25 +5182,24 @@ C =====================================================================
       
       IMPLICIT NONE
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
 
-      REAL PSI_ZN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_ZN(0:M1,0:M2,0:M3)
 
-      REAL DFX(0:M1,0:M2,0:M3),DFY(0:M1,0:M2,0:M3),DFZ(0:M1,0:M2,0:M3)
-      REAL EPS(0:M1,0:M2,0:M3),EPS_OLD(0:M1,0:M2,0:M3)
-      INTEGER PSI_ITERATION,STEADY_EPS
+      REAL*8 DFX(0:M1,0:M2,0:M3),DFY(0:M1,0:M2,0:M3),DFZ(0:M1,0:M2,0:M3)
+      REAL*8 EPS(0:M1,0:M2,0:M3),EPS_OLD(0:M1,0:M2,0:M3)
+      INTEGER*8 PSI_ITERATION,STEADY_EPS
       
-      INTEGER REGION(-1:M1+1,-1:M2+1,-1:M3+1)
-      REAL DF_Z(0:M1,0:M2,0:M3,3),VF_Z(0:M1,0:M2,0:M3,3) 
-      REAL PSI_Z(0:M1,0:M2,0:M3)
-      REAL TAUC(3,2)
+      INTEGER*8 REGION(-1:M1+1,-1:M2+1,-1:M3+1)
+      REAL*8 DF_Z(0:M1,0:M2,0:M3,3),VF_Z(0:M1,0:M2,0:M3,3) 
+      REAL*8 PSI_Z(0:M1,0:M2,0:M3)
+      REAL*8 TAUC(3,2)
 
-      INTEGER ITRACKING
-      REAL DT_CON
+      REAL*8 DT_CON
       
-      INTEGER I,J,K,IP1,IM1,JP1,JM1,KP1,KM1
-      REAL UE,UW,VN,VS,WT,WB
-      REAL PSI_SUM,FLUX_X,FLUX_Y,FLUX_Z,DEN_ZN,DEN_Z
+      INTEGER*8 I,J,K,IP1,IM1,JP1,JM1,KP1,KM1
+      REAL*8 UE,UW,VN,VS,WT,WB
+      REAL*8 PSI_SUM,FLUX_X,FLUX_Y,FLUX_Z,DEN_ZN,DEN_Z
       
 !$OMP PARALLEL DO private(I,J)
        DO K=0,N3
@@ -5196,7 +5290,7 @@ C =====================================================================
 !      VF_Z(I,J,KM1,3)=VISM+VIS_DIFF*PSI6
       
       IF ( DF_Z(I,J,K,1) .EQ. 0. ) THEN
-       IF (ABS(UE) .LE. 1.E-8) THEN
+       IF (DABS(UE) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_ZN(I,J,K)*SDX(IP1)
      &                             +PSI_ZN(IP1,J,K)*SDX(I))*VVDX(IP1)
        ELSE
@@ -5206,7 +5300,7 @@ C =====================================================================
         DF_Z(I,J,K,1)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_Z(IM1,J,K,1) .EQ. 0. ) THEN
-       IF (ABS(UW) .LE. 1.E-8) THEN
+       IF (DABS(UW) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_ZN(IM1,J,K)*SDX(I)
      &                             +PSI_ZN(I,J,K)*SDX(IM1))*VVDX(I)
        ELSE
@@ -5216,7 +5310,7 @@ C =====================================================================
         DF_Z(IM1,J,K,1)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_Z(I,J,K,2) .EQ. 0. ) THEN
-       IF (ABS(VN) .LE. 1.E-8) THEN
+       IF (DABS(VN) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_ZN(I,J,K)*SDY(JP1)
      &                             +PSI_ZN(I,JP1,K)*SDY(J))*VVDY(JP1)
        ELSE
@@ -5226,7 +5320,7 @@ C =====================================================================
         DF_Z(I,J,K,2)=DENM+DEN_DIFF*PSI_SUM
        ENDIF
       IF ( DF_Z(I,JM1,K,2) .EQ. 0. ) THEN
-       IF (ABS(VS) .LE. 1.E-8) THEN
+       IF (DABS(VS) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_ZN(I,JM1,K)*SDY(J)
      &                             +PSI_ZN(I,J,K)*SDY(JM1))*VVDY(J)
        ELSE
@@ -5236,7 +5330,7 @@ C =====================================================================
         DF_Z(I,JM1,K,2)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_Z(I,J,K,3) .EQ. 0. ) THEN
-       IF (ABS(WT) .LE. 1.E-8) THEN
+       IF (DABS(WT) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_ZN(I,J,K)+PSI_ZN(I,J,KP1))
        ELSE
         CALL PSIFACE_Z(I,J,K,WT,PSI_SUM,3)
@@ -5245,7 +5339,7 @@ C =====================================================================
         DF_Z(I,J,K,3)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_Z(I,J,KM1,3) .EQ. 0. ) THEN
-       IF (ABS(WB) .LE. 1.E-8) THEN
+       IF (DABS(WB) .LE. 1.E-8) THEN
          PSI_SUM=0.5*(PSI_ZN(I,J,K)+PSI_ZN(I,J,KM1))
        ELSE
         CALL PSIFACE_Z(I,J,KM1,WB,PSI_SUM,3)        !K-1 NOT KMV(K)
@@ -5281,7 +5375,7 @@ C =====================================================================
        ENDDO
        ENDDO
 
-C-----CONTINUITY BOUNDARY CONDITION : NEUMAN+PERIODIC CONDITION.
+C-----CONTINUITY BOUNDARY CONDITION : NEUMANN+PERIODIC CONDITION.
       IF ( IPX .NE. 1 ) THEN
 !$OMP PARALLEL DO private(J)
       DO K=KBG,N3M
@@ -5550,10 +5644,10 @@ C-----CONTINUITY BOUNDARY CONDITION : NEUMAN+PERIODIC CONDITION.
        RETURN
        END
 
-C =====================================================================
-      SUBROUTINE CONTI_C(ITRACKING,REGION,DF_C,PSI_C,DT_CON,U,V,W
+!C =====================================================================
+      SUBROUTINE CONTI_C(REGION,DF_C,PSI_C,DT_CON,U,V,W
      &,PSI_XN,PSI_YN,PSI_ZN,PSI_CN)
-C =====================================================================
+!C =====================================================================
       USE FLOW_VAR
       USE TWO_PHASE_PROPERTY
 
@@ -5562,31 +5656,30 @@ C =====================================================================
       
       IMPLICIT NONE
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
 
-      REAL PSI_XN(0:M1,0:M2,0:M3)
-      REAL PSI_YN(0:M1,0:M2,0:M3)
-      REAL PSI_ZN(0:M1,0:M2,0:M3)
-      REAL PSI_CN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_XN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_YN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_ZN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_CN(0:M1,0:M2,0:M3)
 
-      INTEGER REGION(-1:M1+1,-1:M2+1,-1:M3+1)
-      REAL DF_C(0:M1,0:M2,0:M3,3)
-      REAL PSI_C(0:M1,0:M2,0:M3)
+      INTEGER*8 REGION(-1:M1+1,-1:M2+1,-1:M3+1)
+      REAL*8 DF_C(0:M1,0:M2,0:M3,3)
+      REAL*8 PSI_C(0:M1,0:M2,0:M3)
 
-      INTEGER ITRACKING
-      REAL DT_CON
+      REAL*8 DT_CON
       
-      INTEGER I,J,K,IP1,IM1,JP1,JM1,KP1,KM1
-      REAL UE,UW,VN,VS,WT,WB
-      REAL PSI_SUM,FLUX_X,FLUX_Y,FLUX_Z,DEN_CN,DEN_C
+      INTEGER*8 I,J,K,IP1,IM1,JP1,JM1,KP1,KM1
+      REAL*8 UE,UW,VN,VS,WT,WB
+      REAL*8 PSI_SUM,FLUX_X,FLUX_Y,FLUX_Z,DEN_CN,DEN_C
       
 !$OMP PARALLEL DO private(I,J)
        DO K=0,N3
        DO J=0,N2
        DO I=0,N1
-        DF_C(I,J,K,1)=0.
-        DF_C(I,J,K,2)=0.
-        DF_C(I,J,K,3)=0.
+        DF_C(I,J,K,1)=0D0
+        DF_C(I,J,K,2)=0D0
+        DF_C(I,J,K,3)=0D0
        ENDDO
        ENDDO
        ENDDO
@@ -5632,7 +5725,7 @@ C =====================================================================
       WB=W(I,J,K)
 
       IF ( DF_C(I,J,K,1) .EQ. 0. ) THEN
-       IF (ABS(UE) .LE. 1.E-8) THEN
+       IF (DABS(UE) .LE. 1.E-8) THEN
          PSI_SUM=PSI_XN(IP1,J,K)
        ELSE
         CALL PSIFACE_C(I,J,K,UE,PSI_SUM,1)
@@ -5640,7 +5733,7 @@ C =====================================================================
         DF_C(I,J,K,1)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_C(IM1,J,K,1) .EQ. 0. ) THEN
-       IF (ABS(UW) .LE. 1.E-8) THEN
+       IF (DABS(UW) .LE. 1.E-8) THEN
          PSI_SUM=PSI_XN(I,J,K)
        ELSE
         CALL PSIFACE_C(IM1,J,K,UW,PSI_SUM,1)
@@ -5648,7 +5741,7 @@ C =====================================================================
         DF_C(IM1,J,K,1)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_C(I,J,K,2) .EQ. 0. ) THEN
-       IF (ABS(VN) .LE. 1.E-8) THEN
+       IF (DABS(VN) .LE. 1.E-8) THEN
          PSI_SUM=PSI_YN(I,JP1,K)
        ELSE
         CALL PSIFACE_C(I,J,K,VN,PSI_SUM,2)
@@ -5656,7 +5749,7 @@ C =====================================================================
         DF_C(I,J,K,2)=DENM+DEN_DIFF*PSI_SUM
        ENDIF
       IF ( DF_C(I,JM1,K,2) .EQ. 0. ) THEN
-       IF (ABS(VS) .LE. 1.E-8) THEN
+       IF (DABS(VS) .LE. 1.E-8) THEN
          PSI_SUM=PSI_YN(I,J,K)
        ELSE
         CALL PSIFACE_C(I,JM1,K,VS,PSI_SUM,2)
@@ -5664,7 +5757,7 @@ C =====================================================================
         DF_C(I,JM1,K,2)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_C(I,J,K,3) .EQ. 0. ) THEN
-       IF (ABS(WT) .LE. 1.E-8) THEN
+       IF (DABS(WT) .LE. 1.E-8) THEN
          PSI_SUM=PSI_CN(I,J,KP1)
        ELSE
         CALL PSIFACE_C(I,J,K,WT,PSI_SUM,3)
@@ -5672,7 +5765,7 @@ C =====================================================================
         DF_C(I,J,K,3)=DENM+DEN_DIFF*PSI_SUM
       ENDIF
       IF ( DF_C(I,J,KM1,3) .EQ. 0. ) THEN
-       IF (ABS(WB) .LE. 1.E-8) THEN
+       IF (DABS(WB) .LE. 1.E-8) THEN
          PSI_SUM=PSI_CN(I,J,K)
        ELSE
         CALL PSIFACE_C(I,J,KM1,WB,PSI_SUM,3)        !K-1 NOT KMV(K)
@@ -5697,16 +5790,16 @@ C =====================================================================
        DO K=1,N3M
        DO J=1,N2M
        DO I=1,N1M
-         IF (PSI_C(I,J,K) .GT. 1.) THEN
-           PSI_C(I,J,K)=1.
-         ELSE IF (PSI_C(I,J,K) .LT. 0.) THEN
-           PSI_C(I,J,K)=0.
+         IF (PSI_C(I,J,K) .GT. 1D0) THEN
+           PSI_C(I,J,K)=1D0
+         ELSE IF (PSI_C(I,J,K) .LT. 0D0) THEN
+           PSI_C(I,J,K)=0D0
          ENDIF
        ENDDO
        ENDDO
        ENDDO
 
-C-----CONTINUITY BOUNDARY CONDITION : NEUMAN+PERIODIC CONDITION.
+!C-----CONTINUITY BOUNDARY CONDITION : NEUMAN+PERIODIC CONDITION.
       IF ( IPX .NE. 1 ) THEN
 !$OMP PARALLEL DO private(J)
       DO K=1,N3M
@@ -5734,7 +5827,7 @@ C-----CONTINUITY BOUNDARY CONDITION : NEUMAN+PERIODIC CONDITION.
       ENDDO
       ENDDO
       ENDIF
-C-----CONTINUITY BOUNDARY CONDITION : NEUMAN+PERIODIC CONDITION.
+!C-----CONTINUITY BOUNDARY CONDITION : NEUMAN+PERIODIC CONDITION.
 
 !       OPEN(145,FILE='0PSI_C.DAT')
 !       WRITE(145,*) 'VARIABLES="X","Y","Z","PSI_C","DPSI_C"'
@@ -5756,9 +5849,9 @@ C-----CONTINUITY BOUNDARY CONDITION : NEUMAN+PERIODIC CONDITION.
        RETURN
        END
 
-C=======================================================================
+!C=======================================================================
       SUBROUTINE PSIFACE_X(I,J,K,UU,PSI_SUM,IDIR)
-C=======================================================================  
+!C=======================================================================  
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
 
@@ -5768,11 +5861,11 @@ C=======================================================================
       
       IMPLICIT NONE
       
-      INTEGER I,J,K,IDIR
-      REAL UU,PSI_SUM
+      INTEGER*8 I,J,K,IDIR
+      REAL*8 UU,PSI_SUM
       
-      INTEGER I1,I2,J1,J2,K1,K2
-      REAL X1,X2,Y1,Y2,Z1,Z2
+      INTEGER*8 I1,I2,J1,J2,K1,K2
+      REAL*8 X1,X2,Y1,Y2,Z1,Z2
 
        !X-DIR
        IF ( IDIR .EQ. 1) THEN
@@ -5863,9 +5956,9 @@ C=======================================================================
        RETURN
        END
 
-C=======================================================================
+!C=======================================================================
       SUBROUTINE PSIFACE_Y(I,J,K,UU,PSI_SUM,IDIR)
-C=======================================================================
+!C=======================================================================
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
 
@@ -5875,11 +5968,11 @@ C=======================================================================
       
       IMPLICIT NONE
       
-      INTEGER I,J,K,IDIR
-      REAL UU,PSI_SUM
+      INTEGER*8 I,J,K,IDIR
+      REAL*8 UU,PSI_SUM
       
-      INTEGER I1,I2,J1,J2,K1,K2
-      REAL X1,X2,Y1,Y2,Z1,Z2
+      INTEGER*8 I1,I2,J1,J2,K1,K2
+      REAL*8 X1,X2,Y1,Y2,Z1,Z2
 
       !X-DIR
        IF ( IDIR .EQ. 1) THEN
@@ -5965,9 +6058,9 @@ C=======================================================================
        RETURN
        END
 
-C=======================================================================
+!C=======================================================================
       SUBROUTINE PSIFACE_Z(I,J,K,UU,PSI_SUM,IDIR)
-C=======================================================================  
+!C=======================================================================  
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
 
@@ -5977,11 +6070,11 @@ C=======================================================================
       
       IMPLICIT NONE
       
-      INTEGER I,J,K,IDIR
-      REAL UU,PSI_SUM
+      INTEGER*8 I,J,K,IDIR
+      REAL*8 UU,PSI_SUM
       
-      INTEGER I1,I2,J1,J2,K1,K2
-      REAL X1,X2,Y1,Y2,Z1,Z2
+      INTEGER*8 I1,I2,J1,J2,K1,K2
+      REAL*8 X1,X2,Y1,Y2,Z1,Z2
 
       !X-DIR
        IF ( IDIR .EQ. 1) THEN  
@@ -6067,9 +6160,9 @@ C=======================================================================
         RETURN
         END
 
-C=======================================================================
+!C=======================================================================
       SUBROUTINE PSIFACE_C(I,J,K,UU,PSI_SUM,IDIR)
-C=======================================================================  
+!C=======================================================================  
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
 
@@ -6079,11 +6172,11 @@ C=======================================================================
       
       IMPLICIT NONE
       
-      INTEGER I,J,K,IDIR
-      REAL UU,PSI_SUM
+      INTEGER*8 I,J,K,IDIR
+      REAL*8 UU,PSI_SUM
       
-      INTEGER I1,I2,J1,J2,K1,K2
-      REAL X1,X2,Y1,Y2,Z1,Z2
+      INTEGER*8 I1,I2,J1,J2,K1,K2
+      REAL*8 X1,X2,Y1,Y2,Z1,Z2
       
        !X-DIR
        IF ( IDIR .EQ. 1) THEN
@@ -6168,10 +6261,10 @@ C=======================================================================
        RETURN
        END
 
-C=======================================================================
+!C=======================================================================
       SUBROUTINE INTER_PSI_FACE(X1,X2,Y1,Y2,Z1,Z2,I1,I2,J1,J2,K1,K2
      &,PSI_SUM)
-C=======================================================================
+!C=======================================================================
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
 
@@ -6180,13 +6273,13 @@ C=======================================================================
       
       IMPLICIT NONE
       
-      INTEGER I1,I2,J1,J2,K1,K2
-      REAL X1,X2,Y1,Y2,Z1,Z2
-      REAL PSI_SUM
+      INTEGER*8 I1,I2,J1,J2,K1,K2
+      REAL*8 X1,X2,Y1,Y2,Z1,Z2
+      REAL*8 PSI_SUM
       
-      INTEGER II,JJ,KK
-      REAL VOLF
-      REAL AI_CUT,AJ_CUT
+      INTEGER*8 II,JJ,KK
+      REAL*8 VOLF
+      REAL*8 AI_CUT,AJ_CUT
 
       !SHOULD BE DONE GEOMETRICALLY.
 
@@ -6591,15 +6684,15 @@ C*******************************************************************
       
       IMPLICIT NONE
 
-      REAL RHS1(M1M,M2M,M3M,3)
+      REAL*8 RHS1(M1M,M2M,M3M,3)
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL DENF_X(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 DENF_X(0:M1,0:M2,0:M3)
 
-      INTEGER N,II,JJ,KK,I1,J1,K1,I2,J2,K2,L
-      REAL UU1,UU2,B1,B2,B3
-      REAL UBODY,UTARG,DENFU
-      REAL DTI
+      INTEGER*8 N,II,JJ,KK,I1,J1,K1,I2,J2,K2,L
+      REAL*8 UU1,UU2,B1,B2,B3
+      REAL*8 UBODY,UTARG,DENFU
+      REAL*8 DTI
       
 C-----compute target velocities & forcing values at forcing points
       UBODY=0.
@@ -6618,14 +6711,14 @@ C-----compute target velocities & forcing values at forcing points
          J2=INT(GFI(N,1,1,1,1))
          K2=INT(GFI(N,1,2,1,1))
 
-      UU1=DENF_X(I1,J1,K1)*U(I1,J1,K1)
-      UU2=DENF_X(I2,J2,K2)*U(I2,J2,K2)
+      UU1=U(I1,J1,K1)!DENF_X(I1,J1,K1)*U(I1,J1,K1)
+      UU2=U(I2,J2,K2)!DENF_X(I2,J2,K2)*U(I2,J2,K2)
 
        B1=GFI(N,1,0,0,0)*UU1+GFI(N,1,0,1,0)*UU2
        B2=GFI(N,1,1,0,0)*UU1+GFI(N,1,1,1,0)*UU2
        B3=GFI(N,1,2,0,0)*UU1+GFI(N,1,2,1,0)*UU2
 
-       DENFU=B1+B2*X(II)+B3*YP(JJ)
+       DENFU=DENF_X(II,JJ,KK)*(B1+B2*X(II)+B3*YP(JJ))
 
        FCV(N,1)=(DENFU-RHS1(II,JJ,KK,1))*DTI
        RHS1(II,JJ,KK,1)=DENFU
@@ -6681,15 +6774,15 @@ C*******************************************************************
       
       IMPLICIT NONE
 
-      REAL RHS1(M1M,M2M,M3M,3)
+      REAL*8 RHS1(M1M,M2M,M3M,3)
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL DENF_Y(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 DENF_Y(0:M1,0:M2,0:M3)
 
-      INTEGER N,II,JJ,KK,I1,J1,K1,I2,J2,K2,L
-      REAL VV1,VV2,B1,B2,B3
-      REAL VBODY,VTARG,DENFV
-      REAL DTI
+      INTEGER*8 N,II,JJ,KK,I1,J1,K1,I2,J2,K2,L
+      REAL*8 VV1,VV2,B1,B2,B3
+      REAL*8 VBODY,VTARG,DENFV
+      REAL*8 DTI
       
 C-----compute target velocities & forcing values at forcing points
       VBODY=0.
@@ -6708,14 +6801,14 @@ C-----compute target velocities & forcing values at forcing points
          J2=INT(GFI(N,2,1,1,1))
          K2=INT(GFI(N,2,2,1,1))
 
-      VV1=DENF_Y(I1,J1,K1)*V(I1,J1,K1)
-      VV2=DENF_Y(I2,J2,K2)*V(I2,J2,K2)
+      VV1=V(I1,J1,K1)!DENF_Y(I1,J1,K1)*V(I1,J1,K1)
+      VV2=V(I2,J2,K2)!DENF_Y(I2,J2,K2)*V(I2,J2,K2)
 
        B1=GFI(N,2,0,0,0)*VV1+GFI(N,2,0,1,0)*VV2
        B2=GFI(N,2,1,0,0)*VV1+GFI(N,2,1,1,0)*VV2
        B3=GFI(N,2,2,0,0)*VV1+GFI(N,2,2,1,0)*VV2
 
-       DENFV=B1+B2*XP(II)+B3*Y(JJ)
+       DENFV=DENF_Y(II,JJ,KK)*(B1+B2*XP(II)+B3*Y(JJ))
 
        FCV(N,2)=(DENFV-RHS1(II,JJ,KK,2))*DTI
        RHS1(II,JJ,KK,2)=DENFV
@@ -6760,15 +6853,15 @@ C*******************************************************************
       
       IMPLICIT NONE
 
-      REAL RHS1(M1M,M2M,M3M,3)
+      REAL*8 RHS1(M1M,M2M,M3M,3)
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL DENF_Z(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 DENF_Z(0:M1,0:M2,0:M3)
       
-      INTEGER N,II,JJ,KK,I1,J1,K1,I2,J2,K2,L
-      REAL WW1,WW2,B1,B2,B3
-      REAL DENC,WBODY,WTARG,DENFW
-      REAL DTI
+      INTEGER*8 N,II,JJ,KK,I1,J1,K1,I2,J2,K2,L
+      REAL*8 WW1,WW2,B1,B2,B3
+      REAL*8 DENC,WBODY,WTARG,DENFW
+      REAL*8 DTI
 
       DENC=0.05*(DENP-DENM)
 
@@ -6789,26 +6882,26 @@ C-----compute target velocities & forcing values at forcing points
          J2=INT(GFI(N,3,1,1,1))
          K2=INT(GFI(N,3,2,1,1))
 
-      IF ( ABS(DENF_Z(II,JJ,KK)-DENM) .LE. DENC   !DENC IS CRITERIA
-     &  .OR. ABS(DENF_Z(II,JJ,KK)-DENP) .LE. DENC ) THEN
-      WW1=DENF_Z(I1,J1,K1)*W(I1,J1,K1)
-      WW2=DENF_Z(I2,J2,K2)*W(I2,J2,K2)
+      ! IF ( ABS(DENF_Z(II,JJ,KK)-DENM) .LE. DENC   !DENC IS CRITERIA
+      ! &  .OR. ABS(DENF_Z(II,JJ,KK)-DENP) .LE. DENC ) THEN
+      WW1=W(I1,J1,K1)!DENF_Z(I1,J1,K1)*W(I1,J1,K1)
+      WW2=W(I2,J2,K2)!DENF_Z(I2,J2,K2)*W(I2,J2,K2)
 
        B1=GFI(N,3,0,0,0)*WW1+GFI(N,3,0,1,0)*WW2
        B2=GFI(N,3,1,0,0)*WW1+GFI(N,3,1,1,0)*WW2
        B3=GFI(N,3,2,0,0)*WW1+GFI(N,3,2,1,0)*WW2
 
-       DENFW=B1+B2*XP(II)+B3*YP(JJ)
+       DENFW=DENF_Z(II,JJ,KK)*(B1+B2*XP(II)+B3*YP(JJ))
 
        FCV(N,3)=(DENFW-RHS1(II,JJ,KK,3))*DTI
        RHS1(II,JJ,KK,3)=DENFW
 
-       ELSE
+       !ELSE
 
-       DENFW=DENF_Z(I1,J1,K1)*W(I1,J1,K1)
-       FCV(N,3)=(DENFW-RHS1(II,JJ,KK,3))*DTI
-       RHS1(II,JJ,KK,3)=DENFW
-      ENDIF
+       ! DENFW=DENF_Z(I1,J1,K1)*W(I1,J1,K1)
+       ! FCV(N,3)=(DENFW-RHS1(II,JJ,KK,3))*DTI
+       ! RHS1(II,JJ,KK,3)=DENFW
+      !ENDIF
 
 !       aa=B1+B2*XP(I1)+B3*YP(J1)
 !       bb=B1+B2*XP(I2)+B3*YP(J2)
@@ -6836,34 +6929,131 @@ C-----compute average forcing values during RK3 steps
 
       RETURN
       END
+!C =====================================================================
+      SUBROUTINE CAL_CONT_BC(PSI_X,PSI_Y,PSI_Z,PSI_C,
+     & DENF_X,DENF_XI,DENF_Y,DENF_YI,DENF_Z,DENF_ZI,DENF_C)
+!C =====================================================================
+      USE FLOW_VAR
+      USE TWO_PHASE_PROPERTY
 
-C===========================CORRECTION_STEP============================C
-C      TWO-PHASE PRESSURE-CORRECTION ALGORITHM                          C
-C                                                                      C
-C      CALCULATE CONTANT POISSON EQUATION ITERATIVELY INSTEAD OF        C
-C     SOLVING VARIABLE POISSON EQUATION ( D.KIM STANFORD THESIS 2011)  C
-C                                                                      C
-C                                            KIYOUNG KIM 2012.8.10     C
-C===========================CORRECTION_STEP============================C
-C*******************************************************************
+      USE PARAM_VAR
+      USE FLOW_GEOM_VAR
+      
+      IMPLICIT NONE
+
+      INTEGER*8 I,J,K
+      
+      REAL*8    PSI_X(0:M1,0:M2,0:M3),PSI_Y(0:M1,0:M2,0:M3),
+     &          PSI_Z(0:M1,0:M2,0:M3),PSI_C(0:M1,0:M2,0:M3)
+     
+      REAL*8    DENF_X(0:M1,0:M2,0:M3),DENF_XI(0:M1,0:M2,0:M3),
+     &          DENF_Y(0:M1,0:M2,0:M3),DENF_YI(0:M1,0:M2,0:M3),
+     &          DENF_Z(0:M1,0:M2,0:M3),DENF_ZI(0:M1,0:M2,0:M3),
+     &          DENF_C(0:M1,0:M2,0:M3)
+                     
+ !$OMP PARALLEL DO private(I,J)
+       DO K=1,N3M
+       DO J=1,N2M
+       DO I=1,N1M !not start at IBG. WE need I=1 for POISSON_SOLVER even though we don`t use periodic condition.
+        DENF_X(I,J,K)=DENM+DEN_DIFF*PSI_X(I,J,K)
+        DENF_XI(I,J,K)=1./DENF_X(I,J,K)
+       ENDDO
+       ENDDO
+       ENDDO
+       IF (IPX .NE. 1) THEN
+!$OMP PARALLEL DO private(J)
+       DO K=1,N3M
+       DO J=1,N2M
+        DENF_X(N1,J,K)=DENF_X(N1M,J,K)
+        DENF_XI(N1,J,K)=DENF_XI(N1M,J,K) !FOR VARIABLE POISSON EQN.
+       ENDDO
+       ENDDO
+       ENDIF
+
+!$OMP PARALLEL DO private(I,J)
+       DO K=1,N3M
+       DO J=1,N2M
+       DO I=1,N1M
+        DENF_Y(I,J,K)=DENM+DEN_DIFF*PSI_Y(I,J,K)
+        DENF_YI(I,J,K)=1./DENF_Y(I,J,K)
+       ENDDO
+       ENDDO
+       ENDDO
+       IF (IPY .NE. 1) THEN
+!$OMP PARALLEL DO private(I)
+       DO K=1,N3M
+       DO I=1,N1M
+        DENF_Y(I,N2,K)=DENF_Y(I,N2M,K)
+        DENF_YI(I,N2,K)=DENF_YI(I,N2M,K) !FOR VARIABLE POISSON EQN.
+       ENDDO
+       ENDDO
+       ENDIF
+
+       IF (N3M .NE. 1) THEN
+!$OMP PARALLEL DO private(I,J)
+       DO K=1,N3M
+       DO J=1,N2M
+       DO I=1,N1M
+         DENF_Z(I,J,K)=DENM+DEN_DIFF*PSI_Z(I,J,K)
+         DENF_ZI(I,J,K)=1./DENF_Z(I,J,K)
+        ENDDO
+        ENDDO
+        ENDDO
+       IF (IPZ .NE. 1) THEN
+!$OMP PARALLEL DO private(I)
+       DO J=1,N2M
+       DO I=1,N1M
+        DENF_Z(I,J,N3)=DENF_Z(I,J,N3M)
+        DENF_ZI(I,J,N3)=DENF_ZI(I,J,N3M) !FOR VARIABLE POISSON EQN.
+       ENDDO
+       ENDDO
+       ENDIF
+       ENDIF
+
+!$OMP PARALLEL DO private(I,J)
+       DO K=1,N3M
+       DO J=1,N2M
+       DO I=1,N1M
+        DENF_C(I,J,K)=DENM+DEN_DIFF*PSI_C(I,J,K)
+       ENDDO
+       ENDDO
+       ENDDO
+ 
+      
+      RETURN
+      END
+
+!C===========================CORRECTION_STEP============================C
+!C      TWO-PHASE PRESSURE-CORRECTION ALGORITHM                          C
+!C                                                                      C
+!C      CALCULATE CONTANT POISSON EQUATION ITERATIVELY INSTEAD OF        C
+!C     SOLVING VARIABLE POISSON EQUATION ( D.KIM STANFORD THESIS 2011)  C
+!C                                                                      C
+!C                                            KIYOUNG KIM 2012.8.10     C
+!C===========================CORRECTION_STEP============================C
+!C*******************************************************************
       SUBROUTINE DIVGS(U,V,W,DIVGSUM)
-C*******************************************************************
-C     POISSON EQUATION PRE-PROCESSING
+!C*******************************************************************
+!C     POISSON EQUATION PRE-PROCESSING
       USE FLOW_VAR
 
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
 
       USE IBM_VAR
-
+      
+      USE LVS_COUPLING
+      USE TWO_PHASE_PROPERTY
+      
       IMPLICIT NONE
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL DIVGSUM(M1M,M2M,M3M)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 DIVGSUM(M1M,M2M,M3M)
 
-      INTEGER I,J,K,II,JJ,KK,IMM,JMM,KMM,N
-      REAL DIVG1,DIVG2,DIVG3
-
+      INTEGER*8 I,J,K,II,JJ,KK,IMM,JMM,KMM,N
+      REAL*8 DIVG1,DIVG2,DIVG3
+      REAL*8 S_SUM,X1,X2,Y1,Y2,Z1,Z2,dvol
+      INTEGER*8 I1,I2,J1,J2,K1,K2                                
 !$OMP PARALLEL DO private(I,J,DIVG1,DIVG2,DIVG3)
       DO K=1,N3M
       DO J=1,N2M
@@ -6885,6 +7075,9 @@ C     POISSON EQUATION PRE-PROCESSING
       ENDDO
       ENDDO
 
+          
+      
+      
       if (masson.eq.1) then
 !$OMP PARALLEL DO private(II,JJ,KK)
       DO N=1,NFC_INTP(1)+NFC_INNER(1)
@@ -6977,17 +7170,24 @@ C*******************************************************************
       
       USE IBM_VAR
       
+      USE FLOW_VAR
+      USE LVS_COUPLING
+      USE TWO_PHASE_PROPERTY      
       IMPLICIT NONE
       
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-
-      REAL DVMAX
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8      DVMAX
       
-      INTEGER I,J,K
-      REAL DVG11,DVG12,DVG13,DIVGMAX_TMP
+      INTEGER*8   I,J,K
+      INTEGER*8   I1,I2,J1,J2,K1,K2   
+      
+      REAL*8      DVG11,DVG12,DVG13,DIVGMAX_TMP      
+      REAL*8      S_SUM,X1,X2,Y1,Y2,Z1,Z2,dvol
 
+      
       DVMAX=0.
-!$OMP PARALLEL DO private(I,J,DVG11,DVG12,DVG13,DIVGMAX_TMP)
+!$OMP PARALLEL DO private(I,J,DVG11,DVG12,DVG13,DIVGMAX_TMP,s_sum)
+!$OMP&private(X1,X2,I1,I2,Y1,Y2,J1,J2,Z1,Z2,K1,K2)
 !$OMP&reduction(MAX:DVMAX)
       DO 13 K=1,N3M
       DO 13 J=1,N2M
@@ -6995,11 +7195,13 @@ C*******************************************************************
        DVG11=(U(IPV(I),J,K)-U(I,J,K))*SSDX(I)
        DVG12=(V(I,JPV(J),K)-V(I,J,K))*SSDY(J)
        DVG13=(W(I,J,KPV(K))-W(I,J,K))*SSDZ(K)
-       DIVGMAX_TMP=ABS(DVG11+DVG12+DVG13-QMASS(I,J,K))  !check qmass..
-       DVMAX=MAX(DIVGMAX_TMP,DVMAX)
+       DIVGMAX_TMP=DABS(DVG11+DVG12+DVG13-QMASS(I,J,K))  !check qmass..
+       !DVMAX=DMAX1(DIVGMAX_TMP,DVMAX)
 !        if (dvmax .eq. divgmax_tmp) then
 !          write(*,*) i,j,k,divgmax_tmp
-!        endif
+       
+       !WRITE(*,*) DIVGMAX_TMP       
+       DVMAX=DMAX1(DABS(DIVGMAX_TMP),DVMAX)                                              
    13 CONTINUE
 
        RETURN
@@ -7017,21 +7219,21 @@ C******************************************************************
       
        IMPLICIT NONE
 
-      REAL W(0:M1,0:M2,0:M3)
+      REAL*8 W(0:M1,0:M2,0:M3)
 
-      REAL PSI_ZN(0:M1,0:M2,0:M3)
-      REAL PSI_CN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_ZN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_CN(0:M1,0:M2,0:M3)
 
-      REAL DENF_Z(0:M1,0:M2,0:M3)
+      REAL*8 DENF_Z(0:M1,0:M2,0:M3)
 
-      REAL VOL1
+      REAL*8 VOL1
       
-      INTEGER I,J,K,N
-      REAL PMI1,PMI2,PMI3,PMI4,PMI5
-      REAL VISU,VISL,WGU1,WGL1,WGU2,WGL2
-      REAL DEN_SUM,DEN_ZN
-      REAL PI
-      REAL FUNCBODY
+      INTEGER*8 I,J,K,N
+      REAL*8 PMI1,PMI2,PMI3,PMI4,PMI5
+      REAL*8 VISU,VISL,WGU1,WGL1,WGU2,WGL2
+      REAL*8 DEN_SUM,DEN_ZN
+      REAL*8 PI
+      REAL*8 FUNCBODY
 
       PMI=0.
       PMI1=0.
@@ -7128,18 +7330,18 @@ C******************************************************************
       
       IMPLICIT NONE
 
-      REAL W(0:M1,0:M2,0:M3)
+      REAL*8 W(0:M1,0:M2,0:M3)
 
-      REAL PSI_ZN(0:M1,0:M2,0:M3)
-      REAL DENF_Z(0:M1,0:M2,0:M3)
+      REAL*8 PSI_ZN(0:M1,0:M2,0:M3)
+      REAL*8 DENF_Z(0:M1,0:M2,0:M3)
 
-      REAL VOL1
-      INTEGER II
+      REAL*8 VOL1
+      INTEGER*8 II
       
-      INTEGER I,J,K
-      REAL QM_TOT,QM_BUB,QM_WAT,QM1,DVOL
-      REAL DEN,DEN_DIFFI,PSI
-      REAL FUNCBODY
+      INTEGER*8 I,J,K
+      REAL*8 QM_TOT,QM_BUB,QM_WAT,QM1,DVOL
+      REAL*8 DEN,PSI
+      REAL*8 FUNCBODY
 
       !ATTENTION
       !HERE MASS FLUX IS NOT DENF_Z(I,J,K)*W(I,J,K)*PSI, BUT DENP*W(I,J,K)*PSI.
@@ -7201,11 +7403,6 @@ C******************************************************************
 
       ELSE IF( II .EQ. 3 ) THEN
 
-      IF (DENR .EQ. 1.) THEN
-      DEN_DIFFI=0.
-      ELSE
-      DEN_DIFFI=1./DEN_DIFF
-      ENDIF
       QM_TOT=0.
       QM_BUB=0.
       QM_WAT=0.
@@ -7245,10 +7442,10 @@ C******************************************************************
       RETURN
       END
  
-C =====================================================================      
+!C =====================================================================      
       SUBROUTINE FSM_CHOI(DENF_XI,DENF_YI,DENF_ZI,U,V,W,P,PSI_ZN,DENF_Z
      &,QVOL_ORI,VOL1)
-C ===================================================================== 
+!C ===================================================================== 
       USE FLOW_VAR
 
       USE PARAM_VAR
@@ -7256,21 +7453,21 @@ C =====================================================================
       
       IMPLICIT NONE
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL P(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 P(0:M1,0:M2,0:M3)
 
-      REAL PSI_ZN(0:M1,0:M2,0:M3)
-      REAL DENF_Z(0:M1,0:M2,0:M3)
+      REAL*8 PSI_ZN(0:M1,0:M2,0:M3)
+      REAL*8 DENF_Z(0:M1,0:M2,0:M3)
  
-      REAL DENF_XI(0:M1,0:M2,0:M3),DENF_YI(0:M1,0:M2,0:M3)
+      REAL*8 DENF_XI(0:M1,0:M2,0:M3),DENF_YI(0:M1,0:M2,0:M3)
      &                                         ,DENF_ZI(0:M1,0:M2,0:M3) 
 
-      REAL VOL1
-      REAL QVOL_ORI
+      REAL*8 VOL1
+      REAL*8 QVOL_ORI
       
-      INTEGER I,J,K,JM1,KM1
-      REAL QVOLH,PHCAP
-      REAL FUNCBODY
+      INTEGER*8 I,J,K,JM1,KM1
+      REAL*8 QVOLH,PHCAP
+      REAL*8 FUNCBODY
 
       IF(ICH.EQ.1) THEN 
        CALL QVOLCALC(QVOLH,2,W,PSI_ZN,DENF_Z,VOL1)
@@ -7316,10 +7513,10 @@ C =====================================================================
        RETURN
        END
 
-C =====================================================================      
-      SUBROUTINE PRESSURE_CORRECTION(IPOISS,U,V,W,P,DENF_Y,DENF_C
+!C =====================================================================      
+      SUBROUTINE PRESSURE_CORRECTION(U,V,W,P,DENF_Y,DENF_C
      &,DENF_XI,DENF_YI,DENF_ZI)
-C =====================================================================        
+!C =====================================================================        
       USE PARAM_VAR
       
       USE FLOW_GEOM_VAR
@@ -7327,38 +7524,37 @@ C =====================================================================
       
       IMPLICIT NONE
       
-      REAL DENF_XI(0:M1,0:M2,0:M3),DENF_YI(0:M1,0:M2,0:M3)
+      REAL*8 DENF_XI(0:M1,0:M2,0:M3),DENF_YI(0:M1,0:M2,0:M3)
      &                                         ,DENF_ZI(0:M1,0:M2,0:M3)
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL P(0:M1,0:M2,0:M3)
-
-      REAL DIVGSUM(M1M,M2M,M3M)
-
-      REAL DENF_Y(0:M1,0:M2,0:M3)
-      REAL DENF_C(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 P(0:M1,0:M2,0:M3)
+      REAL*8 DIVGSUM(M1M,M2M,M3M)
+      REAL*8 DENF_Y(0:M1,0:M2,0:M3)
+      REAL*8 DENF_C(0:M1,0:M2,0:M3)      
+                                 
+                                 
       
-      INTEGER IPOISS
-      REAL FUNCBODY
+                    
+      REAL*8 FUNCBODY
 
-      INTEGER I,J,K
-      REAL PHIREF,DVOL,VOL
+      INTEGER*8 I,J,K
+      REAL*8 PHIREF,DVOL,VOL
  
-       CALL DIVGS(U(0,0,0),V(0,0,0),W(0,0,0),DIVGSUM(1,1,1))
+       CALL DIVGS(U,V,W,DIVGSUM)
  
       IF (IPOISS .EQ. 0) THEN  !1D FFT, 1D MG, 1D TDMA
          write(*,*) 'compile with "poiss_ft_ffte_omp_novec.f"'
          write(*,*) 'CALL_POISINIT IS NEEDED."'
          write(*,*) 'z: periodic. x,y: non-periodic is only possible"'
          stop
-!       CALL POISSON(P,DIVGSUM)
       ELSE IF (IPOISS .EQ. 1) THEN !PRECONDITIONED CONJUGATE GRADIENT
        CALL POISSON_PCG(P,DIVGSUM,DENF_XI,DENF_YI,DENF_ZI,DENF_Y,DENF_C)
       ENDIF
 
        CALL UCALC(DENF_XI,DENF_YI,DENF_ZI,U,V,W,P)
 
-C     SET THE AVERAGE PHI AT THE UPPER WALL TO BE ZERO.
+!C     SET THE AVERAGE PHI AT THE UPPER WALL TO BE ZERO.
       PHIREF=0.
       VOL=0.
 !$OMP PARALLEL DO private(I,J,DVOL)
@@ -7386,6 +7582,7 @@ C     SET THE AVERAGE PHI AT THE UPPER WALL TO BE ZERO.
       DO K=1,N3M
       DO J=1,N2M
          P(0,J,K)=P(1,J,K)
+         P(n1,J,K)=P(n1m,J,K)
       ENDDO
       ENDDO
       ENDIF
@@ -7394,6 +7591,7 @@ C     SET THE AVERAGE PHI AT THE UPPER WALL TO BE ZERO.
       DO K=1,N3M
       DO I=1,N1M
          P(I,0,K)=P(I,1,K)
+         P(I,n2,K)=P(I,n2m,K)
       ENDDO
       ENDDO
       ENDIF
@@ -7402,6 +7600,7 @@ C     SET THE AVERAGE PHI AT THE UPPER WALL TO BE ZERO.
       DO J=1,N2M
       DO I=1,N1M
          P(I,J,0) =P(I,J,1)
+         P(I,J,n3) =P(I,J,n3m)
       ENDDO
       ENDDO
       ENDIF
@@ -7409,10 +7608,10 @@ C     SET THE AVERAGE PHI AT THE UPPER WALL TO BE ZERO.
        RETURN
        END
 
-C*******************************************************************
+!C*******************************************************************
       SUBROUTINE UCALC(DENF_XI,DENF_YI,DENF_ZI,U,V,W,P)
-C*******************************************************************
-C     CALCULATING U FROM UHAT
+!C*******************************************************************
+!C     CALCULATING U FROM UHAT
       USE FLOW_VAR
 
       USE PARAM_VAR
@@ -7420,16 +7619,16 @@ C     CALCULATING U FROM UHAT
       
       IMPLICIT NONE
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL P(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 P(0:M1,0:M2,0:M3)
 
-      REAL DENF_XI(0:M1,0:M2,0:M3),DENF_YI(0:M1,0:M2,0:M3)
+      REAL*8 DENF_XI(0:M1,0:M2,0:M3),DENF_YI(0:M1,0:M2,0:M3)
      &                                         ,DENF_ZI(0:M1,0:M2,0:M3)
      
-      INTEGER I,J,K,JM1,KM1
-      REAL FUNCBODY
+      INTEGER*8 I,J,K,JM1,KM1
+      REAL*8 FUNCBODY
 
-C-----CORRECTION
+!C-----CORRECTION
 !$OMP PARALLEL DO private(I,J)
       DO 22 K=1,N3M
       DO 22 J=1,N2M
@@ -7508,9 +7707,9 @@ C-----CORRECTION
       END
 
 
-C*******************************************************************
+!C*******************************************************************
       SUBROUTINE IBMINIT
-C*******************************************************************
+!C*******************************************************************
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
 
@@ -7518,7 +7717,7 @@ C*******************************************************************
       
       IMPLICIT NONE
       
-      INTEGER I,J,K,N,L,LL
+      INTEGER*8 I,J,K,N,L,LL
 
       ALLOCATE(NFC_INTP(3),NFC_INNER(3))
       ALLOCATE(IFC(MBODY,3),JFC(MBODY,3),KFC(MBODY,3))
@@ -7592,29 +7791,34 @@ C*******************************************************************
 
 
 
-C******************************************************************
-C     SECTION FOR SOLVING UNCOUPLED MOMENTUM EQS. TO GET UHAT
-C     - LHS-EI.F
-C     - FOR SPECIFIC FEATURES, SEE 'rhsnlhs-ei.f'
-C     - THIS IS FASTER THAN 'LHS FOR LES' BECAUSE THIS DOESN'T
-C       CALCULATE COEFS. EVERYTIME
-C     - CAN HANDLE OPEN( 2 TYPES ) OR CLOSED TOP ACCORDING TO ITOPEN.
-C
-C                                  LAST REVISED BY SEONGWON KANG
-C                                            1998.07.06.   13:00
-C******************************************************************
+!C******************************************************************
+!C     SECTION FOR SOLVING UNCOUPLED MOMENTUM EQS. TO GET UHAT
+!C     - LHS-EI.F
+!C     - FOR SPECIFIC FEATURES, SEE 'rhsnlhs-ei.f'
+!C     - THIS IS FASTER THAN 'LHS FOR LES' BECAUSE THIS DOESN'T
+!C       CALCULATE COEFS. EVERYTIME
+!C     - CAN HANDLE OPEN( 2 TYPES ) OR CLOSED TOP ACCORDING TO ITOPEN.
+!C
+!C                                  LAST REVISED BY SEONGWON KANG
+!C                                            1998.07.06.   13:00
+!C******************************************************************
 
-C*******************************************************************
+!C*******************************************************************
       SUBROUTINE TRDIAG1(A,B,C,R,UU,L1,L2,LL1,LL2)
-C*******************************************************************
-C     SOLVE THE TRIDIAGONAL MATRIX (X-1 TRIDIAGONAL) WITH
-C     DIFFERENT COEFFICIENTS.
+!C*******************************************************************
+!C     SOLVE THE TRIDIAGONAL MATRIX (X-1 TRIDIAGONAL) WITH
+!C     DIFFERENT COEFFICIENTS.
 
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
       
-      DIMENSION GAM(M2,M1),A(M2,M1),B(M2,M1),C(M2,M1),
-     &          R(M2,M1),UU(M2,M1),BET(M2)
+      IMPLICIT NONE
+      INTEGER*8   I,J,K,LL1,LL2,L1,L2
+      REAL*8, dimension (:,:), ALLOCATABLE  ::  A,B,C,R,UU,GAM
+      REAL*8, dimension (:), ALLOCATABLE  ::  BET
+      
+      ALLOCATE( GAM(M2,M1),A(M2,M1),B(M2,M1),C(M2,M1),
+     &          R(M2,M1),UU(M2,M1),BET(M2))
 
       DO 10 I=LL1,LL2
       BET(I)=1./B(I,L1)
@@ -7635,92 +7839,106 @@ C     DIFFERENT COEFFICIENTS.
       RETURN
       END
 
-C*******************************************************************
+!C*******************************************************************
       SUBROUTINE TRDIAG2(A,B,C,R,UU,L1,L2,LL1,LL2)
-C*******************************************************************
-C     SOLVE THE TRIDIAGONAL MATRIX (X-2 TRIDIAGONAL) WITH
-C     DIFFERENT COEFFICIENTS.
-
-      USE PARAM_VAR
-      USE FLOW_GEOM_VAR
-
-      DIMENSION GAM(M1,M2),A(M1,M2),B(M1,M2),C(M1,M2),
-     &          R(M1,M2),UU(M1,M2),BET(M1)
-
-      DO 10 I=LL1,LL2
-      BET(I)=1./B(I,L1)
-      UU(I,L1)=R(I,L1)*BET(I)
-   10 CONTINUE
-
-      DO 20 J=L1+1,L2
-      DO 20 I=LL1,LL2
-      GAM(I,J)=C(I,J-1)*BET(I)
-      BET(I)=1./(B(I,J)-A(I,J)*GAM(I,J))
-      UU(I,J)=(R(I,J)-A(I,J)*UU(I,J-1))*BET(I)
-   20 CONTINUE
-      DO 30 J=L2-1,L1,-1
-      DO 30 I=LL1,LL2
-      UU(I,J)=UU(I,J)-GAM(I,J+1)*UU(I,J+1)
-   30 CONTINUE
-
-      RETURN
-      END
-
-C*******************************************************************
-      SUBROUTINE TRDIAG3(A,B,C,R,UU,L1,L2,LL1,LL2)
-C*******************************************************************
-C     SOLVE THE TRIDIAGONAL MATRIX (X-3 TRIDIAGONAL) WITH
-C     DIFFERENT COEFFICIENTS.
-
-      USE PARAM_VAR
-      USE FLOW_GEOM_VAR
-
-      DIMENSION GAM(M1,M3),A(M1,M3),B(M1,M3),C(M1,M3),
-     &          R(M1,M3),UU(M1,M3),BET(M1)
-
-      DO 10 I=LL1,LL2
-      BET(I)=1./B(I,L1)
-      UU(I,L1)=R(I,L1)*BET(I)
-   10 CONTINUE
-
-      DO 20 J=L1+1,L2
-      DO 20 I=LL1,LL2
-      GAM(I,J)=C(I,J-1)*BET(I)
-      BET(I)=1./(B(I,J)-A(I,J)*GAM(I,J))
-      UU(I,J)=(R(I,J)-A(I,J)*UU(I,J-1))*BET(I)
-   20 CONTINUE
-      DO 30 J=L2-1,L1,-1
-      DO 30 I=LL1,LL2
-      UU(I,J)=UU(I,J)-GAM(I,J+1)*UU(I,J+1)
-   30 CONTINUE
-
-      RETURN
-      END
-
-C*******************************************************************
-      SUBROUTINE TRDIAG1P(A,B,C,F,J1,J2,L1,L2)
-C*******************************************************************
-C     INVERT A PERIODIC MATRIX (X-3 TRIDIAGONAL) WITH
-C     DIFFERENT COEFFICIENTS.
+!C*******************************************************************
+!C     SOLVE THE TRIDIAGONAL MATRIX (X-2 TRIDIAGONAL) WITH
+!C     DIFFERENT COEFFICIENTS.
 
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
       
-      REAL A(M2,M1),B(M2,M1),C(M2,M1),F(M2,M1),Q(M2,M1),
+      IMPLICIT NONE
+      INTEGER*8   I,J,K,LL1,LL2,L1,L2
+      REAL*8, dimension (:,:), ALLOCATABLE  ::  A,B,C,R,UU,GAM
+      REAL*8, dimension (:), ALLOCATABLE  ::  BET
+      
+      ALLOCATE( GAM(M1,M2),A(M1,M2),B(M1,M2),C(M1,M2),
+     &          R(M1,M2),UU(M1,M2),BET(M1))
+
+      DO 10 I=LL1,LL2
+      BET(I)=1./B(I,L1)
+      UU(I,L1)=R(I,L1)*BET(I)
+   10 CONTINUE
+
+      DO 20 J=L1+1,L2
+      DO 20 I=LL1,LL2
+      GAM(I,J)=C(I,J-1)*BET(I)
+      BET(I)=1./(B(I,J)-A(I,J)*GAM(I,J))
+      UU(I,J)=(R(I,J)-A(I,J)*UU(I,J-1))*BET(I)
+   20 CONTINUE
+      DO 30 J=L2-1,L1,-1
+      DO 30 I=LL1,LL2
+      UU(I,J)=UU(I,J)-GAM(I,J+1)*UU(I,J+1)
+   30 CONTINUE
+
+      RETURN
+      END
+
+!C*******************************************************************
+      SUBROUTINE TRDIAG3(A,B,C,R,UU,L1,L2,LL1,LL2)
+!C*******************************************************************
+!C     SOLVE THE TRIDIAGONAL MATRIX (X-3 TRIDIAGONAL) WITH
+!C     DIFFERENT COEFFICIENTS.
+
+      USE PARAM_VAR
+      USE FLOW_GEOM_VAR
+      IMPLICIT NONE
+      
+      INTEGER*8   I,J,K,LL1,LL2,L1,L2
+      REAL*8, dimension (:,:), ALLOCATABLE  ::  A,B,C,R,UU,GAM
+      REAL*8, dimension (:), ALLOCATABLE  ::  BET
+      
+      ALLOCATE( GAM(M1,M3),A(M1,M3),B(M1,M3),C(M1,M3),
+     &          R(M1,M3),UU(M1,M3),BET(M1))
+
+      DO 10 I=LL1,LL2
+      BET(I)=1./B(I,L1)
+      UU(I,L1)=R(I,L1)*BET(I)
+   10 CONTINUE
+
+      DO 20 J=L1+1,L2
+      DO 20 I=LL1,LL2
+      GAM(I,J)=C(I,J-1)*BET(I)
+      BET(I)=1./(B(I,J)-A(I,J)*GAM(I,J))
+      UU(I,J)=(R(I,J)-A(I,J)*UU(I,J-1))*BET(I)
+   20 CONTINUE
+      DO 30 J=L2-1,L1,-1
+      DO 30 I=LL1,LL2
+      UU(I,J)=UU(I,J)-GAM(I,J+1)*UU(I,J+1)
+   30 CONTINUE
+
+      RETURN
+      END
+
+!C*******************************************************************
+      SUBROUTINE TRDIAG1P(A,B,C,F,J1,J2,L1,L2)
+!C*******************************************************************
+!C     INVERT A PERIODIC MATRIX (X-3 TRIDIAGONAL) WITH
+!C     DIFFERENT COEFFICIENTS.
+
+      USE PARAM_VAR
+      USE FLOW_GEOM_VAR
+      
+      IMPLICIT NONE
+      INTEGER*8   JA,J1,J2,L1,L2,JJ,K,I,J
+      REAL*8      BINV   
+      
+      REAL*8 A(M2,M1),B(M2,M1),C(M2,M1),F(M2,M1),Q(M2,M1),
      %     S(M2,M1),QE(M2,M1),FN(M2),PN(M2)
 
-      JA=J1+1
-      JJ=J1+J2
-      DO 10 K=L1,L2
-      BINV=1./B(K,J1)
-      Q(K,J1)=-C(K,J1)*BINV
-      S(K,J1)=-A(K,J1)*BINV
-      FN(K)=F(K,J2)
-      F(K,J1)=F(K,J1)*BINV
+      JA=J1+1                                 
+      JJ=J1+J2                                
+      DO 10 K=L1,L2       !for L1 to L2 set (j1,2 is responsible for discretized dir)                   
+      BINV=1./B(K,J1)     !calculate the inverse of the first line j1                    
+      Q(K,J1)=-C(K,J1)*BINV  ! the first line C                 
+      S(K,J1)=-A(K,J1)*BINV  ! the first line A                 
+      FN(K)=F(K,J2)          ! the last line RHS1 related (not devided)                  
+      F(K,J1)=F(K,J1)*BINV   ! the first line RHS1-related                  
    10 CONTINUE
 
-C     FORWARD ELIMINATION SWEEP
-      DO 20 J=JA,J2
+!C     FORWARD ELIMINATION SWEEP
+      DO 20 J=JA,J2          ! J1 is excluded: no worry about the division above
       DO 20 K=L1,L2
       PN(K)=1./(B(K,J)+A(K,J)*Q(K,J-1))
       Q(K,J)=-C(K,J)*PN(K)
@@ -7728,7 +7946,7 @@ C     FORWARD ELIMINATION SWEEP
       F(K,J)=(F(K,J)-A(K,J)*F(K,J-1))*PN(K)
    20 CONTINUE
 
-C     BACKWARD PASS
+!C     BACKWARD PASS
       DO 30 K=L1,L2
       S(K,J2)=1.
       QE(K,J2)=0.
@@ -7744,7 +7962,7 @@ C     BACKWARD PASS
      %       /(C(K,J2)*S(K,J1)+A(K,J2)*S(K,J2-1)+B(K,J2))
    50 CONTINUE
 
-C     BACKWARD ELIMINATION PASS
+!C     BACKWARD ELIMINATION PASS
       DO 60 I=JA,J2
       J=JJ-I
       DO 60 K=L1,L2
@@ -7754,16 +7972,20 @@ C     BACKWARD ELIMINATION PASS
       RETURN
       END
 
-C*******************************************************************
+!C*******************************************************************
       SUBROUTINE TRDIAG2P(A,B,C,F,J1,J2,L1,L2)
-C*******************************************************************
-C     INVERT A PERIODIC MATRIX (X-2 TRIDIAGONAL) WITH
-C     DIFFERENT COEFFICIENTS.
+!C*******************************************************************
+!C     INVERT A PERIODIC MATRIX (X-2 TRIDIAGONAL) WITH
+!C     DIFFERENT COEFFICIENTS.
 
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
       
-      REAL A(M1,M2),B(M1,M2),C(M1,M2),F(M1,M2),Q(M1,M2),
+      IMPLICIT NONE
+      INTEGER*8   JA,J1,J2,L1,L2,JJ,K,I,J
+      REAL*8      BINV      
+      
+      REAL*8 A(M1,M2),B(M1,M2),C(M1,M2),F(M1,M2),Q(M1,M2),
      %     S(M1,M2),QE(M1,M2),FN(M1),PN(M1)
 
       JA=J1+1
@@ -7811,16 +8033,20 @@ C     BACKWARD ELIMINATION PASS
       RETURN
       END
 
-C*******************************************************************
+!C*******************************************************************
       SUBROUTINE TRDIAG3P(A,B,C,F,J1,J2,L1,L2)
-C*******************************************************************
-C     INVERT A PERIODIC MATRIX (X-3 TRIDIAGONAL) WITH
-C     DIFFERENT COEFFICIENTS.
+!C*******************************************************************
+!C     INVERT A PERIODIC MATRIX (X-3 TRIDIAGONAL) WITH
+!C     DIFFERENT COEFFICIENTS.
 
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
 
-      REAL A(M1,M3),B(M1,M3),C(M1,M3),F(M1,M3),Q(M1,M3),
+      IMPLICIT NONE
+      INTEGER*8   JA,J1,J2,L1,L2,JJ,K,I,J
+      REAL*8      BINV
+      
+      REAL*8 A(M1,M3),B(M1,M3),C(M1,M3),F(M1,M3),Q(M1,M3),
      %     S(M1,M3),QE(M1,M3),FN(M1),PN(M1)
 
       JA=J1+1
@@ -7868,111 +8094,9 @@ C     BACKWARD ELIMINATION PASS
       RETURN
       END
 
-!C*******************************************************************
-!      SUBROUTINE TRDIAG1(A,B,C,R,UU,L1,L2,LL1,LL2)
-!C*******************************************************************
-!C     Tridiagonal Matrix Solver (X-1 direction)
-!C     CONSTANT coefficients
-!C     L1,L2 : TDMA (J) direction
-!C     LL1,LL2 : Vectorization (I) direction
-!
-!      INCLUDE'param.h'
-!      DIMENSION GAM(M1),A(M1),B(M1),C(M1)
-!     &         ,R(M2,M1),UU(M2,M1),BET(M1)
-!
-!      BET(L1)=B(L1)
-!      DO 10 I=LL1,LL2
-!      UU(I,L1)=R(I,L1)/BET(L1)
-!   10 CONTINUE
-!      DO 11 J=L1+1,L2
-!      GAM(J)=C(J-1)/BET(J-1)
-!      BET(J)=B(J)-A(J)*GAM(J)
-!   11 CONTINUE
-!
-!      DO 20 J=L1+1,L2
-!      DO 20 I=LL1,LL2
-!      UU(I,J)=(R(I,J)-A(J)*UU(I,J-1))/BET(J)
-!   20 CONTINUE
-!
-!      DO 30 J=L2-1,L1,-1
-!      DO 30 I=LL1,LL2
-!      UU(I,J)=UU(I,J)-GAM(J+1)*UU(I,J+1)
-!   30 CONTINUE
-!
-!      RETURN
-!      END
-!
-!C*******************************************************************
-!      SUBROUTINE TRDIAG2(A,B,C,R,UU,L1,L2,LL1,LL2)
-!C*******************************************************************
-!C     Tridiagonal Matrix Solver (X-2 direction)
-!C     CONSTANT coefficients
-!C     L1,L2 : TDMA (J) direction
-!C     LL1,LL2 : Vectorization (I) direction
-!
-!      INCLUDE'param.h'
-!      DIMENSION GAM(M2),A(M2),B(M2),C(M2)
-!     &         ,R(M1,M2),UU(M1,M2),BET(M2)
-!
-!      BET(L1)=B(L1)
-!      DO 10 I=LL1,LL2
-!      UU(I,L1)=R(I,L1)/BET(L1)
-!   10 CONTINUE
-!      DO 11 J=L1+1,L2
-!      GAM(J)=C(J-1)/BET(J-1)
-!      BET(J)=B(J)-A(J)*GAM(J)
-!   11 CONTINUE
-!
-!      DO 20 J=L1+1,L2
-!      DO 20 I=LL1,LL2
-!      UU(I,J)=(R(I,J)-A(J)*UU(I,J-1))/BET(J)
-!   20 CONTINUE
-!
-!      DO 30 J=L2-1,L1,-1
-!      DO 30 I=LL1,LL2
-!      UU(I,J)=UU(I,J)-GAM(J+1)*UU(I,J+1)
-!   30 CONTINUE
-!
-!      RETURN
-!      END
-!
-!C*******************************************************************
-!      SUBROUTINE TRDIAG3(A,B,C,R,UU,L1,L2,LL1,LL2)
-!C*******************************************************************
-!C     Tridiagonal Matrix Solver (X-3 direction)
-!C     CONSTANT coefficients
-!C     L1,L2 : TDMA (J) direction
-!C     LL1,LL2 : Vectorization (I) direction
-!
-!      INCLUDE'param.h'
-!      DIMENSION GAM(M3),A(M3),B(M3),C(M3)
-!     &         ,R(M1,M3),UU(M1,M3),BET(M3)
-!
-!      BET(L1)=B(L1)
-!      DO 10 I=LL1,LL2
-!      UU(I,L1)=R(I,L1)/BET(L1)
-!   10 CONTINUE
-!      DO 11 J=L1+1,L2
-!      GAM(J)=C(J-1)/BET(J-1)
-!      BET(J)=B(J)-A(J)*GAM(J)
-!   11 CONTINUE
-!
-!      DO 20 J=L1+1,L2
-!      DO 20 I=LL1,LL2
-!      UU(I,J)=(R(I,J)-A(J)*UU(I,J-1))/BET(J)
-!   20 CONTINUE
-!
-!      DO 30 J=L2-1,L1,-1
-!      DO 30 I=LL1,LL2
-!      UU(I,J)=UU(I,J)-GAM(J+1)*UU(I,J+1)
-!   30 CONTINUE
-!
-!      RETURN
-!      END
-
-
-C----------------------------- PTDIAG1A -------------------------------
-C     SOLVE THE PENTADIAGONAL MATRIX (X-1 PENTADIAGONAL)
+      
+!C----------------------------- PTDIAG1A -------------------------------
+!C     SOLVE THE PENTADIAGONAL MATRIX (X-1 PENTADIAGONAL)
 
       SUBROUTINE PTDIAG1A(A,B,C,D,E,F,UU,I1,IN,J1,JN,O,Q,R)
 
@@ -8022,30 +8146,34 @@ C     SOLVE THE PENTADIAGONAL MATRIX (X-1 PENTADIAGONAL)
       RETURN
       END
 
-C*******************************************************************
+!C*******************************************************************
       SUBROUTINE MASSCHECK(QMMAX)
-C*******************************************************************
+!C*******************************************************************
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
 
       USE IBM_VAR
-
+      
+      IMPLICIT NONE
+      INTEGER*8 I,J,K
+      REAL*8      QMMAX
+      
       QMMAX=0.
 !$OMP PARALLEL DO private(I,J)
 !$OMP&reduction(MAX:QMMAX)
       DO 100 K=1,N3M
       DO 100 J=1,N2M
       DO 100 I=1,N1M
-      QMMAX=MAX(QMMAX,ABS(QMASS(I,J,K)))  !THIS QMASS IS NOT Q WHEN TWO-PHASE SIMULATION.
+      QMMAX=DMAX1(QMMAX,DABS(QMASS(I,J,K)))  !THIS QMASS IS NOT Q WHEN TWO-PHASE SIMULATION.
                                             !DENSITY SHOULD BE 
  100  CONTINUE
 
       RETURN
       END
 
-C******************************************************************
+!C******************************************************************
       SUBROUTINE CAL_RHSPS(U,V,W,ANPSO,PSI_CN,DF_C)
-C******************************************************************
+!C******************************************************************
       USE FLOW_VAR
 
       USE PARAM_VAR
@@ -8056,14 +8184,27 @@ C******************************************************************
       
       USE TWO_PHASE_PROPERTY
       
-      REAL PSI_CN(0:M1,0:M2,0:M3)
-      REAL DF_C(0:M1,0:M2,0:M3,3)
+      IMPLICIT NONE
+      
+      INTEGER*8 I,J,K,IP1,JP1,KP1,IM1,JM1,KM1
+      REAL*8 FUNCBODY,UU,DENSC,TGR_TMP,TGR
+      REAL*8 REPRI
+      REAL*8  PSI_TMP,DENSCE,TCE,DENSCW,TCW,
+     &                DENSCN,TCN,DENSCS,TCS,
+     &                DENSCT,TCT,DENSCB,TCB
+      REAL*8  PSE,PSW,PSC,PSF,PSN,PSS,ANPSX,ANPSY,ANPSZ,ANPS !CONVECTION
+      REAL*8  ALPSE,ALPSW,ALPSN,ALPSS,ALPSC,ALPSF,ALPSX,ALPSY,ALPSZ,ALPS !DIFFUSION
+      REAL*8  AMEANT1,AMEANT2
+      
+      REAL*8 PSI_CN(0:M1,0:M2,0:M3)
+      REAL*8 DF_C(0:M1,0:M2,0:M3,3)
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
 
-      REAL ANPSO(M1M,M2M,M3M)
+      REAL*8 ANPSO(M1M,M2M,M3M)
 
-!!!!! FOR MEAN TEMPERATURE
+!!!!! FOR MEAN TEMPERATURE!!!!!!!            
+       TGR=0D0                     
        TGR_TMP=0.
 !$OMP PARALLEL DO private(I,J,KP1,DENSC,UU)
 !$OMP&reduction(+:TGR_TMP)
@@ -8085,11 +8226,6 @@ C******************************************************************
 
       REPRI=1./(RE*PRM)
       
-       IF (DEN_DIFF .EQ. 0.) THEN
-      	DEN_DIFFI=1.
-       ELSE
-        DEN_DIFFI=1./DEN_DIFF
-       ENDIF
 !$OMP PARALLEL DO private(I,J,IP1,IM1,JP1,JM1,KP1,KM1,PSI_TMP)
 !$OMP&private(DENSCE,DENSCW,DENSCN,DENSCS,DENSCT,DENSCB)
 !$OMP&private(TCE,TCW,TCN,TCS,TCT,TCB)
@@ -8097,36 +8233,41 @@ C******************************************************************
 !$OMP&private(ALPSE,ALPSW,ALPSN,ALPSS,ALPSC,ALPSF,ALPSX,ALPSY,ALPSZ)
 !$OMP&private(ALPS,DENSC,UU,AMEANT1,AMEANT2)
       DO K=1,N3M
-      	KP1=KPV(K)
-      	KM1=KMV(K)
+        KP1=KPV(K)
+        KM1=KMV(K)
       DO J=1,N2M
-      	JP1=JPV(J)
-      	JM1=JMV(J)
+        JP1=JPV(J)
+        JM1=JMV(J)
       DO I=1,N1M
-      	IP1=IPV(I)
-      	IM1=IMV(I)
+        IP1=IPV(I)
+        IM1=IMV(I)
 
        PSI_TMP=(DF_C(I,J,K,1)-DENM)*DEN_DIFFI
        DENSCE=DENSCM+DENSC_DIFF*PSI_TMP
-     	 TCE=TCM+TC_DIFF*PSI_TMP
+       TCE=TCM+TC_DIFF*PSI_TMP
+		 
        PSI_TMP=(DF_C(IM1,J,K,1)-DENM)*DEN_DIFFI
        DENSCW=DENSCM+DENSC_DIFF*PSI_TMP
-     	 TCW=TCM+TC_DIFF*PSI_TMP
+       TCW=TCM+TC_DIFF*PSI_TMP
+	   
        PSI_TMP=(DF_C(I,J,K,2)-DENM)*DEN_DIFFI
        DENSCN=DENSCM+DENSC_DIFF*PSI_TMP
-     	 TCN=TCM+TC_DIFF*PSI_TMP
+       TCN=TCM+TC_DIFF*PSI_TMP
+
        PSI_TMP=(DF_C(I,JM1,K,2)-DENM)*DEN_DIFFI
        DENSCS=DENSCM+DENSC_DIFF*PSI_TMP
-     	 TCS=TCM+TC_DIFF*PSI_TMP
+       TCS=TCM+TC_DIFF*PSI_TMP
+       
        PSI_TMP=(DF_C(I,J,K,3)-DENM)*DEN_DIFFI
        DENSCT=DENSCM+DENSC_DIFF*PSI_TMP
      	 TCT=TCM+TC_DIFF*PSI_TMP
+       
        PSI_TMP=(DF_C(I,J,KM1,3)-DENM)*DEN_DIFFI
        DENSCB=DENSCM+DENSC_DIFF*PSI_TMP
      	 TCB=TCM+TC_DIFF*PSI_TMP
 
       !CONVECTION
-      PSE=0.5*(SDX(IP1)*T(I,J,K)+SDX(I)*T(IP1,J,K))*VVDX(IP1)
+      PSE=0.5*(SDX(IP1)*T(I,J,K)+SDX(I)*T(IP1,J,K))*VVDX(IP1) ! interpolation
       PSW=0.5*(SDX(IM1)*T(I,J,K)+SDX(I)*T(IM1,J,K))*VVDX(I)
       PSC=0.5*(SDZ(KP1)*T(I,J,K)+SDZ(K)*T(I,J,KP1))*VVDZ(KP1)
       PSF=0.5*(SDZ(KM1)*T(I,J,K)+SDZ(K)*T(I,J,KM1))*VVDZ(K)
@@ -8173,7 +8314,7 @@ C******************************************************************
        UU=0.5*(W(I,J,KP1)+W(I,J,K))
        AMEANT1=DENSC*UU*TGR
 
-       AMEANT2=REPRI*(TCE-TCW)*SSDX(I)
+       AMEANT2=REPRI*(TCt-TCb)*SSDz(k)*TGR
 
       RHSPS(I,J,K)=( ( GAMMA(MSUB)*ANPS+RO(MSUB)*ANPSO(I,J,K) )
      &              +2.*ALPHA_RK3*ALPS
@@ -8196,20 +8337,25 @@ C******************************************************************
       END
 
 
-C*******************************************************************
+!C*******************************************************************
       SUBROUTINE IBMINIT_PS
-C*******************************************************************
+!C*******************************************************************
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
 
       USE IBM_VAR
 
+      IMPLICIT NONE
+      INTEGER*8 L,I,J,K,N
+      
       ALLOCATE(IFC_PS(MBODY),JFC_PS(MBODY),KFC_PS(MBODY))
       ALLOCATE(FCV_PS(MBODY),FCVAVG_PS(MBODY))
       ALLOCATE(MPI_PS(MBODY0,3))
       ALLOCATE(GFI_PS(MBODY0,0:2,0:2,0:2))
 
       ALLOCATE(RHSPS_IBM(M1M,M2M,M3M))
+      
+
 
 !$OMP PARALLEL DO
         DO L=1,MBODY
@@ -8250,9 +8396,9 @@ C*******************************************************************
       RETURN
       END
 
-C*******************************************************************
+!C*******************************************************************
       SUBROUTINE RHS_IBM_PS(PSI_CN,PSI_C)
-C*******************************************************************
+!C*******************************************************************
       USE FLOW_VAR
 
       USE PARAM_VAR
@@ -8264,41 +8410,50 @@ C*******************************************************************
       
       USE TWO_PHASE_PROPERTY
 
-      REAL PSI_CN(0:M1,0:M2,0:M3)
-      REAL PSI_C(0:M1,0:M2,0:M3)
+      IMPLICIT NONE
+      REAL*8      DTI,R1,R2,R3
+      INTEGER*8   II,JJ,KK,N,I2,J2,K2,I3,J3,K3
+      REAL*8      DENSC,DENSCF
+      REAL*8      A11,A12,A13,A21,A22,A23,A31,A32,A33
+      REAL*8      DETI,A1,A2,A3,TTARG
+      
+      REAL*8 PSI_CN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_C(0:M1,0:M2,0:M3)
 
-C-----compute target velocities & forcing values at forcing points
+!C-----compute target velocities & forcing values at forcing points
 !      TBODY=1.
       DTI=1./DT
 
 !$OMP PARALLEL DO private(II,JJ,KK,I2,J2,K2,I3,J3,K3)
 !$OMP&private(R1,R2,R3,A11,A12,A13,A21,A22,A23,A31,A32,A33)
-!$OMP&private(DET1,A1,A2,A3,TTARG,DENSC,DENSCF)
+!$OMP&private(DETI,A1,A2,A3,TTARG,DENSC,DENSCF)
       DO N=1,NFC_INTP_PS
          II =IFC_PS(N)
          JJ =JFC_PS(N)
          KK =KFC_PS(N)
 
-       I2=INT(GFI_PS(N,0,0,1))
-       J2=INT(GFI_PS(N,1,0,1))
-       K2=INT(GFI_PS(N,2,0,1))
-       I3=INT(GFI_PS(N,0,1,1))
-       J3=INT(GFI_PS(N,1,1,1))
-       K3=INT(GFI_PS(N,2,1,1))
+       I2=INT(GFI_PS(N,0,0,1))   !I1=II or IPAIR       !THIS IS FOR INDEX.
+       J2=INT(GFI_PS(N,1,0,1))   !J1=JJ or JPAIR     
+       K2=INT(GFI_PS(N,2,0,1))   !K1=KK      
+       I3=INT(GFI_PS(N,0,1,1))   !   
+       J3=INT(GFI_PS(N,1,1,1))   !     
+       K3=INT(GFI_PS(N,2,1,1))   ! 
 
        !RHS PART
        R1=1./(TCM+TC_DIFF*PSI_CN(II,JJ,KK))
-       DENSC=DENSCM+DENSC_DIFF*PSI_CN(I2,J2,K2)
-       DENSCF=DENSCM+DENSC_DIFF*PSI_C(I2,J2,K2)
+	   
+        DENSC =DENSCM+DENSC_DIFF*PSI_CN(I2,J2,K2)
+        DENSCF=DENSCM+DENSC_DIFF*PSI_C(I2,J2,K2)
        R2=(DENSC*T(I2,J2,K2)+RHSPS_IBM(I2,J2,K2))/DENSCF
-       DENSC=DENSCM+DENSC_DIFF*PSI_CN(I3,J3,K3)
-       DENSCF=DENSCM+DENSC_DIFF*PSI_C(I3,J3,K3)
+	   
+        DENSC =DENSCM+DENSC_DIFF*PSI_CN(I3,J3,K3)
+        DENSCF=DENSCM+DENSC_DIFF*PSI_C(I3,J3,K3)
        R3=(DENSC*T(I3,J3,K3)+RHSPS_IBM(I3,J3,K3))/DENSCF
 
        !CONSTRUCT MATRIX
-       A11=GFI_PS(N,0,2,1)
-       A12=GFI_PS(N,1,2,1)
-       A13=GFI_PS(N,2,2,1)
+       A11=GFI_PS(N,0,2,1) ! 0.
+       A12=GFI_PS(N,1,2,1) ! DPX
+       A13=GFI_PS(N,2,2,1) ! DPY
        A21=1.
        A22=XP(I2)
        A23=YP(J2)
@@ -8307,7 +8462,8 @@ C-----compute target velocities & forcing values at forcing points
        A33=YP(J3)
 
 !http://www.cg.info.hiroshima-cu.ac.jp/~miyazaki/knowledge/teche23.html
-       !SOLVE MATRIX
+       !inverse matrix of 3by 3 matrix
+	   !SOLVE MATRIX
        DETI=1./(A11*A22*A33+A21*A32*A13+A31*A12*A23
      &                           -A11*A32*A23-A31*A22*A13-A21*A12*A33)
        A1=((A22*A33-A23*A32)*R1+(A13*A32-A12*A33)*R2
@@ -8317,7 +8473,7 @@ C-----compute target velocities & forcing values at forcing points
        A3=((A21*A32-A22*A31)*R1+(A12*A31-A11*A32)*R2
      &                                    +(A11*A22-A12*A21)*R3)*DETI
 
-       TTARG=A1+A2*XP(II)+A3*YP(JJ)
+       TTARG=A1+A2*XP(II)+A3*YP(JJ) !
         
 !        WRITE(*,*) II,I2,I3
 !        WRITE(*,*) JJ,J2,J3
@@ -8332,6 +8488,144 @@ C-----compute target velocities & forcing values at forcing points
        FCV_PS(N)=(DENSCF*TTARG-(DENSC*T(II,JJ,KK)+RHSPS_IBM(II,JJ,KK)))
      &                                                             *DTI
        RHSPS(II,JJ,KK)=RHSPS(II,JJ,KK)+FCV_PS(N)*DT
+
+      ENDDO
+       !FCV_PS IS ACTUALLY 2*ALPHA_RK3*HEAT_SOURCE
+
+!$OMP PARALLEL DO private(II,JJ,KK)
+!$OMP&private(DENSC,DENSCF,TTARG)
+      DO N=NFC_INTP_PS+1,NFC_INTP_PS+NFC_INNER_PS
+         II =IFC_PS(N)
+         JJ =JFC_PS(N)
+         KK =KFC_PS(N)
+         TTARG=0.!바깥으로는 TBODY 기준온도가 0이 되는 거네
+         
+       DENSC=DENSCM+DENSC_DIFF*PSI_CN(II,JJ,KK)
+       DENSCF=DENSCM+DENSC_DIFF*PSI_C(II,JJ,KK)
+
+       FCV_PS(N)=(DENSCF*TTARG-(DENSC*T(II,JJ,KK)+RHSPS_IBM(II,JJ,KK))) ! heat source? 되는 거고
+     &                                                              *DTI
+       RHSPS(II,JJ,KK)=RHSPS(II,JJ,KK)+FCV_PS(N)*DT
+
+      ENDDO
+
+      IF (MSUB .EQ. 1) HEAT_SUM=0.
+!$OMP PARALLEL DO reduction(+:HEAT_SUM)
+      DO N=1,NFC_INTP_PS!+NFC_INNER_PS
+       HEAT_SUM=HEAT_SUM+FCV_PS(N)
+     &                    *SDX(IFC_PS(N))*SDY(JFC_PS(N))*SDZ(KFC_PS(N))
+      ENDDO
+!       IF (ALPHA_RK3 .NE. 0.) HEAT_SUM=HEAT_SUM/(2.*ALPHA_RK3)  !AT INITIAL STEP, ALPHA_RK3=0.      
+!       WRITE(*,*) 'Total_HEAT_SUM=',HEAT_SUM
+
+      RETURN
+      END
+
+C*******************************************************************
+      SUBROUTINE RHS_IBM_PS1(PSI_CN,PSI_C)
+C*******************************************************************
+      USE FLOW_VAR
+
+      USE PARAM_VAR
+      USE FLOW_GEOM_VAR
+
+      USE IBM_VAR
+
+      USE HEAT_VAR
+      
+      USE TWO_PHASE_PROPERTY
+      
+      IMPLICIT NONE
+      
+      REAL*8  DTI,REPR,T_TMP1,T_TMP2,T_TMP3
+      REAL*8  THETA_TMP,TCC,TTARG,DENSC,DENSCF
+      INTEGER*8 N,II,JJ,KK,IP,JP,KP 
+      
+      REAL*8 PSI_CN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_C(0:M1,0:M2,0:M3)
+
+C-----compute target velocities & forcing values at forcing points
+!      TBODY=1.
+      DTI=1./DT
+      REPR=RE*PRM
+
+!$OMP PARALLEL DO private(II,JJ,KK,IP,JP,KP)
+!$OMP&private(DENSC,DENSCF,T_TMP1,T_TMP2,T_TMP3,THETA_TMP,TCC,TTARG)
+      DO N=1,NFC_INTP_PS
+         II =IFC_PS(N)
+         JJ =JFC_PS(N)
+         KK =KFC_PS(N)
+         IP =IFC_PS(N)+MPI_PS(N,1)
+         JP =JFC_PS(N)+MPI_PS(N,2)
+         KP =KFC_PS(N)+MPI_PS(N,3)
+!         IPP=IFC_PS(N)+MPI_PS(N,1)*2
+!         JPP=JFC_PS(N)+MPI_PS(N,2)*2
+!         KPP=KFC_PS(N)+MPI_PS(N,3)*2
+!         TTARG=
+!     &   GFI_PS(N,0,0,0)* TBODY
+!     &  +GFI_PS(N,0,0,1)*(T(II ,JJ ,KP )+RHSPS_IBM(II ,JJ ,KP ))
+!     &  +GFI_PS(N,0,0,2)*(T(II ,JJ ,KPP)+RHSPS_IBM(II ,JJ ,KPP))
+!     &  +GFI_PS(N,0,1,0)*(T(II ,JP ,KK )+RHSPS_IBM(II ,JP ,KK ))
+!     &  +GFI_PS(N,0,1,1)*(T(II ,JP ,KP )+RHSPS_IBM(II ,JP ,KP ))
+!     &  +GFI_PS(N,0,1,2)*(T(II ,JP ,KPP)+RHSPS_IBM(II ,JP ,KPP))
+!     &  +GFI_PS(N,0,2,0)*(T(II ,JPP,KK )+RHSPS_IBM(II ,JPP,KK ))
+!     &  +GFI_PS(N,0,2,1)*(T(II ,JPP,KP )+RHSPS_IBM(II ,JPP,KP ))
+!     &  +GFI_PS(N,0,2,2)*(T(II ,JPP,KPP)+RHSPS_IBM(II ,JPP,KPP))
+!     &  +GFI_PS(N,1,0,0)*(T(IP ,JJ ,KK )+RHSPS_IBM(IP ,JJ ,KK ))
+!     &  +GFI_PS(N,1,0,1)*(T(IP ,JJ ,KP )+RHSPS_IBM(IP ,JJ ,KP ))
+!     &  +GFI_PS(N,1,0,2)*(T(IP ,JJ ,KPP)+RHSPS_IBM(IP ,JJ ,KPP))
+!     &  +GFI_PS(N,1,1,0)*(T(IP ,JP ,KK )+RHSPS_IBM(IP ,JP ,KK ))
+!     &  +GFI_PS(N,1,1,1)*(T(IP ,JP ,KP )+RHSPS_IBM(IP ,JP ,KP ))
+!     &  +GFI_PS(N,1,1,2)*(T(IP ,JP ,KPP)+RHSPS_IBM(IP ,JP ,KPP))
+!     &  +GFI_PS(N,1,2,0)*(T(IP ,JPP,KK )+RHSPS_IBM(IP ,JPP,KK ))
+!     &  +GFI_PS(N,1,2,1)*(T(IP ,JPP,KP )+RHSPS_IBM(IP ,JPP,KP ))
+!     &  +GFI_PS(N,1,2,2)*(T(IP ,JPP,KPP)+RHSPS_IBM(IP ,JPP,KPP))
+!     &  +GFI_PS(N,2,0,0)*(T(IPP,JJ ,KK )+RHSPS_IBM(IPP,JJ ,KK ))
+!     &  +GFI_PS(N,2,0,1)*(T(IPP,JJ ,KP )+RHSPS_IBM(IPP,JJ ,KP ))
+!     &  +GFI_PS(N,2,0,2)*(T(IPP,JJ ,KPP)+RHSPS_IBM(IPP,JJ ,KPP))
+!     &  +GFI_PS(N,2,1,0)*(T(IPP,JP ,KK )+RHSPS_IBM(IPP,JP ,KK ))
+!     &  +GFI_PS(N,2,1,1)*(T(IPP,JP ,KP )+RHSPS_IBM(IPP,JP ,KP ))
+!     &  +GFI_PS(N,2,1,2)*(T(IPP,JP ,KPP)+RHSPS_IBM(IPP,JP ,KPP))
+!     &  +GFI_PS(N,2,2,0)*(T(IPP,JPP,KK )+RHSPS_IBM(IPP,JPP,KK ))
+!     &  +GFI_PS(N,2,2,1)*(T(IPP,JPP,KP )+RHSPS_IBM(IPP,JPP,KP ))
+!     &  +GFI_PS(N,2,2,2)*(T(IPP,JPP,KPP)+RHSPS_IBM(IPP,JPP,KPP))
+
+       DENSC=DENSCM+DENSC_DIFF*PSI_CN(IP,JJ,KK)
+       DENSCF=DENSCM+DENSC_DIFF*PSI_C(IP,JJ,KK)
+       T_TMP1=(DENSC*T(IP,JJ,KK)+RHSPS_IBM(IP,JJ,KK))/DENSCF
+
+       DENSC=DENSCM+DENSC_DIFF*PSI_CN(IP,JP,KK)
+       DENSCF=DENSCM+DENSC_DIFF*PSI_C(IP,JP,KK)
+       T_TMP2=(DENSC*T(IP,JP,KK)+RHSPS_IBM(IP,JP,KK))/DENSCF
+
+       DENSC=DENSCM+DENSC_DIFF*PSI_CN(II,JP,KK)
+       DENSCF=DENSCM+DENSC_DIFF*PSI_C(II,JP,KK)
+       T_TMP3=(DENSC*T(II,JP,KK)+RHSPS_IBM(II,JP,KK))/DENSCF
+
+       THETA_TMP=GFI_PS(N,0,0,0)*T_TMP1
+     &              +GFI_PS(N,0,0,1)*T_TMP2+GFI_PS(N,0,0,2)*T_TMP3
+       TCC=TCM+TC_DIFF*PSI_CN(II,JJ,KK)
+       TTARG=THETA_TMP-GFI_PS(N,0,1,0)/TCC
+
+!       THETA_TMP=T(IP,JP,KK)
+!       TCC=TCM+TC_DIFF*PSI_CN(II,JJ,KK)
+!       TTARG=THETA_TMP-sqrt((xp(ip)-xp(ii))**2+(yp(jp)-yp(jj))**2)/TCC
+
+       DENSC=DENSCM+DENSC_DIFF*PSI_CN(II,JJ,KK)
+       DENSCF=DENSCM+DENSC_DIFF*PSI_C(II,JJ,KK)
+
+       FCV_PS(N)=(DENSCF*TTARG-(DENSC*T(II,JJ,KK)+RHSPS_IBM(II,JJ,KK)))
+     &                                                              *DTI
+       RHSPS(II,JJ,KK)=RHSPS(II,JJ,KK)+FCV_PS(N)*DT
+
+!      if ( kk.eq.1) then
+!      if (msub .eq. 1) write(*,*) ii,jj,GFI_PS(N,0,1,0)!fcv_ps(n)/(2.*alpha_rk3)
+!!      write(*,*) ttarg,t(ii,jj,kk),rhsps_ibm(ii,jj,kk)/(2.*alpha_rk3)
+!!      write(*,*) TTARG-T(II,JJ,KK),TTARG-T(II,JJ,KK)-RHSPS_IBM(II,JJ,KK)
+!!      write(*,*)  (TTARG-T(II,JJ,KK)-RHSPS_IBM(II,JJ,KK))*dti
+!!      write(*,*)  (TTARG-T(II,JJ,KK)-RHSPS_IBM(II,JJ,KK))*dti
+!     & /(2.*alpha_rk3)
+!      endif
 
       ENDDO
        !FCV_PS IS ACTUALLY 2*ALPHA_RK3*HEAT_SOURCE
@@ -8365,172 +8659,33 @@ C-----compute target velocities & forcing values at forcing points
       RETURN
       END
 
-!C*******************************************************************
-!      SUBROUTINE RHS_IBM_PS(PSI_CN,PSI_C)
-!C*******************************************************************
-!      USE FLOW_VAR
-!
-!      USE PARAM_VAR
-!      USE FLOW_GEOM_VAR
-!
-!      USE IBM_VAR
-!
-!      USE HEAT_VAR
-!      
-!      USE TWO_PHASE_PROPERTY
-!
-!      REAL PSI_CN(0:M1,0:M2,0:M3)
-!      REAL PSI_C(0:M1,0:M2,0:M3)
-!
-!C-----compute target velocities & forcing values at forcing points
-!!      TBODY=1.
-!      DTI=1./DT
-!      REPR=RE*PRM
-!
-!        IF (DENR .EQ. 1) THEN
-!         DEN_DIFFI=1.
-!        ELSE
-!         DEN_DIFFI=1./DEN_DIFF
-!        ENDIF
-!
-!!$OMP PARALLEL DO private(II,JJ,KK,IP,JP,KP)
-!!$OMP&private(DENSC,DENSCF,T_TMP1,T_TMP2,T_TMP3,THETA_TMP,TCC,TTARG)
-!      DO N=1,NFC_INTP_PS
-!         II =IFC_PS(N)
-!         JJ =JFC_PS(N)
-!         KK =KFC_PS(N)
-!         IP =IFC_PS(N)+MPI_PS(N,1)
-!         JP =JFC_PS(N)+MPI_PS(N,2)
-!         KP =KFC_PS(N)+MPI_PS(N,3)
-!!         IPP=IFC_PS(N)+MPI_PS(N,1)*2
-!!         JPP=JFC_PS(N)+MPI_PS(N,2)*2
-!!         KPP=KFC_PS(N)+MPI_PS(N,3)*2
-!!         TTARG=
-!!     &   GFI_PS(N,0,0,0)* TBODY
-!!     &  +GFI_PS(N,0,0,1)*(T(II ,JJ ,KP )+RHSPS_IBM(II ,JJ ,KP ))
-!!     &  +GFI_PS(N,0,0,2)*(T(II ,JJ ,KPP)+RHSPS_IBM(II ,JJ ,KPP))
-!!     &  +GFI_PS(N,0,1,0)*(T(II ,JP ,KK )+RHSPS_IBM(II ,JP ,KK ))
-!!     &  +GFI_PS(N,0,1,1)*(T(II ,JP ,KP )+RHSPS_IBM(II ,JP ,KP ))
-!!     &  +GFI_PS(N,0,1,2)*(T(II ,JP ,KPP)+RHSPS_IBM(II ,JP ,KPP))
-!!     &  +GFI_PS(N,0,2,0)*(T(II ,JPP,KK )+RHSPS_IBM(II ,JPP,KK ))
-!!     &  +GFI_PS(N,0,2,1)*(T(II ,JPP,KP )+RHSPS_IBM(II ,JPP,KP ))
-!!     &  +GFI_PS(N,0,2,2)*(T(II ,JPP,KPP)+RHSPS_IBM(II ,JPP,KPP))
-!!     &  +GFI_PS(N,1,0,0)*(T(IP ,JJ ,KK )+RHSPS_IBM(IP ,JJ ,KK ))
-!!     &  +GFI_PS(N,1,0,1)*(T(IP ,JJ ,KP )+RHSPS_IBM(IP ,JJ ,KP ))
-!!     &  +GFI_PS(N,1,0,2)*(T(IP ,JJ ,KPP)+RHSPS_IBM(IP ,JJ ,KPP))
-!!     &  +GFI_PS(N,1,1,0)*(T(IP ,JP ,KK )+RHSPS_IBM(IP ,JP ,KK ))
-!!     &  +GFI_PS(N,1,1,1)*(T(IP ,JP ,KP )+RHSPS_IBM(IP ,JP ,KP ))
-!!     &  +GFI_PS(N,1,1,2)*(T(IP ,JP ,KPP)+RHSPS_IBM(IP ,JP ,KPP))
-!!     &  +GFI_PS(N,1,2,0)*(T(IP ,JPP,KK )+RHSPS_IBM(IP ,JPP,KK ))
-!!     &  +GFI_PS(N,1,2,1)*(T(IP ,JPP,KP )+RHSPS_IBM(IP ,JPP,KP ))
-!!     &  +GFI_PS(N,1,2,2)*(T(IP ,JPP,KPP)+RHSPS_IBM(IP ,JPP,KPP))
-!!     &  +GFI_PS(N,2,0,0)*(T(IPP,JJ ,KK )+RHSPS_IBM(IPP,JJ ,KK ))
-!!     &  +GFI_PS(N,2,0,1)*(T(IPP,JJ ,KP )+RHSPS_IBM(IPP,JJ ,KP ))
-!!     &  +GFI_PS(N,2,0,2)*(T(IPP,JJ ,KPP)+RHSPS_IBM(IPP,JJ ,KPP))
-!!     &  +GFI_PS(N,2,1,0)*(T(IPP,JP ,KK )+RHSPS_IBM(IPP,JP ,KK ))
-!!     &  +GFI_PS(N,2,1,1)*(T(IPP,JP ,KP )+RHSPS_IBM(IPP,JP ,KP ))
-!!     &  +GFI_PS(N,2,1,2)*(T(IPP,JP ,KPP)+RHSPS_IBM(IPP,JP ,KPP))
-!!     &  +GFI_PS(N,2,2,0)*(T(IPP,JPP,KK )+RHSPS_IBM(IPP,JPP,KK ))
-!!     &  +GFI_PS(N,2,2,1)*(T(IPP,JPP,KP )+RHSPS_IBM(IPP,JPP,KP ))
-!!     &  +GFI_PS(N,2,2,2)*(T(IPP,JPP,KPP)+RHSPS_IBM(IPP,JPP,KPP))
-!
-!       DENSC=DENSCM+DENSC_DIFF*PSI_CN(IP,JJ,KK)
-!       DENSCF=DENSCM+DENSC_DIFF*PSI_C(IP,JJ,KK)
-!       T_TMP1=(DENSC*T(IP,JJ,KK)+RHSPS_IBM(IP,JJ,KK))/DENSCF
-!
-!       DENSC=DENSCM+DENSC_DIFF*PSI_CN(IP,JP,KK)
-!       DENSCF=DENSCM+DENSC_DIFF*PSI_C(IP,JP,KK)
-!       T_TMP2=(DENSC*T(IP,JP,KK)+RHSPS_IBM(IP,JP,KK))/DENSCF
-!
-!       DENSC=DENSCM+DENSC_DIFF*PSI_CN(II,JP,KK)
-!       DENSCF=DENSCM+DENSC_DIFF*PSI_C(II,JP,KK)
-!       T_TMP3=(DENSC*T(II,JP,KK)+RHSPS_IBM(II,JP,KK))/DENSCF
-!
-!       THETA_TMP=GFI_PS(N,0,0,0)*T_TMP1
-!     &              +GFI_PS(N,0,0,1)*T_TMP2+GFI_PS(N,0,0,2)*T_TMP3
-!       TCC=TCM+TC_DIFF*PSI_CN(II,JJ,KK)
-!       TTARG=THETA_TMP-GFI_PS(N,0,1,0)/TCC
-!
-!!       THETA_TMP=T(IP,JP,KK)
-!!       TCC=TCM+TC_DIFF*PSI_CN(II,JJ,KK)
-!!       TTARG=THETA_TMP-sqrt((xp(ip)-xp(ii))**2+(yp(jp)-yp(jj))**2)/TCC
-!
-!       DENSC=DENSCM+DENSC_DIFF*PSI_CN(II,JJ,KK)
-!       DENSCF=DENSCM+DENSC_DIFF*PSI_C(II,JJ,KK)
-!
-!       FCV_PS(N)=(DENSCF*TTARG-(DENSC*T(II,JJ,KK)+RHSPS_IBM(II,JJ,KK)))
-!     &                                                              *DTI
-!       RHSPS(II,JJ,KK)=RHSPS(II,JJ,KK)+FCV_PS(N)*DT
-!
-!!      if ( kk.eq.1) then
-!!      if (msub .eq. 1) write(*,*) ii,jj,GFI_PS(N,0,1,0)!fcv_ps(n)/(2.*alpha_rk3)
-!!!      write(*,*) ttarg,t(ii,jj,kk),rhsps_ibm(ii,jj,kk)/(2.*alpha_rk3)
-!!!      write(*,*) TTARG-T(II,JJ,KK),TTARG-T(II,JJ,KK)-RHSPS_IBM(II,JJ,KK)
-!!!      write(*,*)  (TTARG-T(II,JJ,KK)-RHSPS_IBM(II,JJ,KK))*dti
-!!!      write(*,*)  (TTARG-T(II,JJ,KK)-RHSPS_IBM(II,JJ,KK))*dti
-!!     & /(2.*alpha_rk3)
-!!      endif
-!
-!      ENDDO
-!       !FCV_PS IS ACTUALLY 2*ALPHA_RK3*HEAT_SOURCE
-!
-!!$OMP PARALLEL DO private(II,JJ,KK)
-!!$OMP&private(DENSC,DENSCF,TTARG)
-!      DO N=NFC_INTP_PS+1,NFC_INTP_PS+NFC_INNER_PS
-!         II =IFC_PS(N)
-!         JJ =JFC_PS(N)
-!         KK =KFC_PS(N)
-!         TTARG=0.!TBODY
-!         
-!       DENSC=DENSCM+DENSC_DIFF*PSI_CN(II,JJ,KK)
-!       DENSCF=DENSCM+DENSC_DIFF*PSI_C(II,JJ,KK)
-!
-!       FCV_PS(N)=(DENSCF*TTARG-(DENSC*T(II,JJ,KK)+RHSPS_IBM(II,JJ,KK)))
-!     &                                                              *DTI
-!       RHSPS(II,JJ,KK)=RHSPS(II,JJ,KK)+FCV_PS(N)*DT
-!
-!      ENDDO
-!
-!      IF (MSUB .EQ. 1) HEAT_SUM=0.
-!!$OMP PARALLEL DO reduction(+:HEAT_SUM)
-!      DO N=1,NFC_INTP_PS!+NFC_INNER_PS
-!       HEAT_SUM=HEAT_SUM+FCV_PS(N)
-!     &                    *SDX(IFC_PS(N))*SDY(JFC_PS(N))*SDZ(KFC_PS(N))
-!      ENDDO
-!!       IF (ALPHA_RK3 .NE. 0.) HEAT_SUM=HEAT_SUM/(2.*ALPHA_RK3)  !AT INITIAL STEP, ALPHA_RK3=0.      
-!!       WRITE(*,*) 'Total_HEAT_SUM=',HEAT_SUM
-!
-!      RETURN
-!      END
-
-C------------------------------- LHSPS --------------------------------
-C******************************************************************
-      SUBROUTINE LHSPS(U,V,W,PSI_CN,PSI_C,DF_C)
-C******************************************************************
+!------------------------------- LHSPS --------------------------------
+!******************************************************************
+      SUBROUTINE LHSPS(PSI_CN,PSI_C,DF_C)
+!******************************************************************
       USE FLOW_VAR
 
       USE PARAM_VAR
       USE FLOW_GEOM_VAR
 
       USE HEAT_VAR
-      
+      !USE LES_VAR
       USE TWO_PHASE_PROPERTY
+      
+      IMPLICIT NONE
+      !REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      INTEGER*8   I,J,K
+      REAL*8 CREPR,DK1,DK2,DK3,DJ1,DJ2,DJ3,DI1,DI2,DI3,ACOPS
+      REAL*8 DENSCF,COEF,PSI_TMP,TCT,TCB,TALPHC,TALPHF
+      REAL*8 TCN,TCS,TALPHN,TALPHS,TCE,TCW,TALPHE,TALPHW                         
+      REAL*8 PSI_CN(0:M1,0:M2,0:M3)
+      REAL*8 DF_C(0:M1,0:M2,0:M3,3)
+      REAL*8 PSI_C(0:M1,0:M2,0:M3)
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8, dimension (:,:), allocatable :: AI,BI,CI,GI
+      REAL*8, dimension (:,:), allocatable :: AJ,BJ,CJ,GJ
+      REAL*8, dimension (:,:), allocatable :: AK,BK,CK,GK
 
-      REAL PSI_CN(0:M1,0:M2,0:M3)
-      REAL DF_C(0:M1,0:M2,0:M3,3)
-      REAL PSI_C(0:M1,0:M2,0:M3)
-
-      real, dimension (:,:), allocatable :: AI,BI,CI,GI
-      real, dimension (:,:), allocatable :: AJ,BJ,CJ,GJ
-      real, dimension (:,:), allocatable :: AK,BK,CK,GK
-
-       IF (DEN_DIFF .EQ. 0.) THEN
-      	DEN_DIFFI=1.
-       ELSE
-        DEN_DIFFI=1./DEN_DIFF
-       ENDIF
 
 !ccccc_explicit_euler
 !       DO K=1,N3M
@@ -8548,9 +8703,9 @@ C******************************************************************
       CREPR=0.!FLOAT(ILES)*RE*PRA
       ACOPS=ALPHA_RK3*DT/(RE*PRM)!0.5*DT*REI*PRAI
 
-C     Z-DIRECTION
+!     Z-DIRECTION
       IF (N3M.EQ.1) GOTO 1000
-!$OMP PARALLEL private(I,K,DK1,DK2,DK3)
+!$OMP PARALLEL private(I,K)
 !$OMP&private(AK,CK,BK,GK,DENSCF,COEF,PSI_TMP,TCT,TCB,TALPHC,TALPHF)
       allocate(AK(M1,M3),BK(M1,M3),CK(M1,M3),GK(M1,M3))
 !$OMP DO
@@ -8593,7 +8748,7 @@ C     Z-DIRECTION
 
  1000 CONTINUE
 
-!$OMP PARALLEL private(I,J,DJ1,DJ2,DJ3,DI1,DI2,DI3)
+!$OMP PARALLEL private(I,J)
 !$OMP&private(AJ,BJ,CJ,GJ,AI,BI,CI,GI,DENSCF,COEF,PSI_TMP,TCN,TCS)
 !$OMP&private(TALPHN,TALPHS,TCE,TCW,TALPHE,TALPHW)
       allocate(AI(M2,M1),BI(M2,M1),CI(M2,M1),GI(M2,M1))
@@ -8601,7 +8756,7 @@ C     Z-DIRECTION
 !$OMP DO
       DO K=1,N3M
 
-C     Y-DIRECTION
+!     Y-DIRECTION
       DO J=1,N2M
       DO I=1,N1M
        	DENSCF=DENSCM+DENSC_DIFF*PSI_C(I,J,K)
@@ -8629,7 +8784,7 @@ C     Y-DIRECTION
        CALL TRDIAG2(AJ,BJ,CJ,GJ,GJ,1,N2M,1,N1M)
       ENDIF
       
-C     X-DIRECTION
+!     X-DIRECTION
       DO J=1,N2M
       DO I=1,N1M
        	DENSCF=DENSCM+DENSC_DIFF*PSI_C(I,J,K)
@@ -8655,7 +8810,7 @@ C     X-DIRECTION
        CALL TRDIAG1(AI,BI,CI,GI,GI,1,N1M,1,N2M)
       ENDIF
 
-C     UPDATE T
+!     UPDATE T
       DO J=1,N2M
       DO I=1,N1M
       T(I,J,K)=GI(J,I)+T(I,J,K)
@@ -8726,15 +8881,15 @@ C     UPDATE T
       RETURN
       END
 
-C******************************************************************
+!******************************************************************
 !                      FIELD AVERAGING ROUTINES
 !                                                    JUNGIL LEE
 !                                                     AUG. 2006
-C******************************************************************
-C******************************************************************
+!******************************************************************
+!******************************************************************
       SUBROUTINE FIELD_AVG_INIT_RT(IHIST)
-C******************************************************************
-C     SUBROUTINE FOR FIELD AVERAGING
+!******************************************************************
+!     SUBROUTINE FOR FIELD AVERAGING
       USE FLOW_VAR
 
       USE PARAM_VAR
@@ -8743,11 +8898,15 @@ C     SUBROUTINE FOR FIELD AVERAGING
       USE FLD_AVG
 
       USE HEAT_VAR
+      
+      IMPLICIT NONE
 
+      INTEGER*4 IHIST
+      
       ALLOCATE (URAVGZ(M1M,M2M),UTAVGZ(M1M,M2M))
       ALLOCATE (WAVGZ(M1M,M2M),UIUJAVGZ(M1M,M2M,6),
      &          PAVGZ(M1M,M2M),P2AVGZ(M1M,M2M),
-     &          TNUAVGZ(M1M,M2M),VOLFZ(M1M,M2M))
+     &          VOLFZ(M1M,M2M))!TNUAVGZ(M1M,M2M),
 !     &         SIJAVGZ(M1M,M2M,6),VORAVGZ(M1M,M2M,3),
 !     &         SSAVGZ(M1M,M2M),SGSDISSZ(M1M,M2M),
       ALLOCATE (URAVGZ0(M1M,M2M),UTAVGZ0(M1M,M2M))
@@ -8771,12 +8930,12 @@ C     SUBROUTINE FOR FIELD AVERAGING
       PAVGZ=0.
       P2AVGZ=0.
       PMIAVG=0.
-      TNUAVGZ=0.
-      SIJAVGZ=0.
-      VORAVGZ=0.
+      ! TNUAVGZ=0.
+      ! SIJAVGZ=0.
+      ! VORAVGZ=0.
       VOLFZ=0.
-      SSAVGZ=0.
-      SGSDISSZ=0.
+      ! SSAVGZ=0.
+      ! SGSDISSZ=0.
 
       URAVGZ0=0.
       UTAVGZ0=0.
@@ -8815,13 +8974,13 @@ C     SUBROUTINE FOR FIELD AVERAGING
       RETURN
       END
 
-C******************************************************************
+!******************************************************************
       SUBROUTINE FIELD_AVG_RT(IHIST,NAV,U,V,W,P,PSI_CN)
-C******************************************************************
-C     SUBROUTINE FOR FIELD AVERAGING
-C     AVERAGED VARIABLES ARE DEFINED AT CELL CENTER
-C     VARIABLES ARE LINEARLY INTERPOLATED
-C     FROM STAGGERED GRID STRUCTURE TO DETERMINE CELL CENTER VALUES
+!******************************************************************
+!     SUBROUTINE FOR FIELD AVERAGING
+!     AVERAGED VARIABLES ARE DEFINED AT CELL CENTER
+!     VARIABLES ARE LINEARLY INTERPOLATED
+!     FROM STAGGERED GRID STRUCTURE TO DETERMINE CELL CENTER VALUES
       USE FLOW_VAR
 
       USE PARAM_VAR
@@ -8831,19 +8990,24 @@ C     FROM STAGGERED GRID STRUCTURE TO DETERMINE CELL CENTER VALUES
 
       USE FLD_AVG
       
-      USE LES_VAR
+      ! USE LES_VAR
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL P(0:M1,0:M2,0:M3)
+      IMPLICIT NONE
+      INTEGER*8   I,J,K,IDG1,IDG2,IDG3,IDG4,IDG5,IDG6,NAV,L,IHIST
+      REAL*8      UCC,VCC,WCC,AA,COS1,SIN1,UR,UT
+      REAL*8      SIJAVGZ,VORAVGZ,SSAVGZ
+      
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 P(0:M1,0:M2,0:M3)
 
-      REAL PSI_CN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_CN(0:M1,0:M2,0:M3)
 
       CHARACTER*16 tname
       CHARACTER*3  tfn1
       CHARACTER*1  tfnh
       CHARACTER*6  tfn2,tfn3
-      REAL SR(6)
-      real, dimension (:,:), allocatable :: TMP
+      REAL*8 SR(6)
+      REAL*8, dimension (:,:), allocatable :: TMP
 
       tfnh='-'
 
@@ -8855,7 +9019,7 @@ C     FROM STAGGERED GRID STRUCTURE TO DETERMINE CELL CENTER VALUES
       UCC=0.5*(U(I,J,K)+U(IPV(I),J,K))
       VCC=0.5*(V(I,J,K)+V(I,JPV(J),K))
       WCC=0.5*(W(I,J,K)+W(I,J,KPV(K)))
-        AA=1./SQRT(XP(I)**2+YP(J)**2)    !FOR TE CASE OF RT CENTER IS AT DOMAIN CENTER
+        AA=1./DSQRT(XP(I)**2+YP(J)**2)    !FOR TE CASE OF RT CENTER IS AT DOMAIN CENTER
           COS1=XP(I)*AA
           SIN1=YP(J)*AA
         UR=UCC*COS1+VCC*SIN1
@@ -9019,7 +9183,7 @@ C     FROM STAGGERED GRID STRUCTURE TO DETERMINE CELL CENTER VALUES
       UCC=0.5*(U(I,J,K)+U(IPV(I),J,K))
       VCC=0.5*(V(I,J,K)+V(I,JPV(J),K))
       WCC=0.5*(W(I,J,K)+W(I,J,KPV(K)))
-        AA=1./SQRT(XP(I)**2+YP(J)**2)    !FOR TE CASE OF RT CENTER IS AT DOMAIN CENTER
+        AA=1./DSQRT(XP(I)**2+YP(J)**2)    !FOR TE CASE OF RT CENTER IS AT DOMAIN CENTER
           COS1=XP(I)*AA
           SIN1=YP(J)*AA
         UR=UCC*COS1+VCC*SIN1
@@ -9092,12 +9256,12 @@ C     FROM STAGGERED GRID STRUCTURE TO DETERMINE CELL CENTER VALUES
       WRITE(NAV,104)(( P2AVGZ(I,J)    ,I=1,N1M),J=1,N2M)
       WRITE(NAV,104)(( VOLFZ(I,J)     ,I=1,N1M),J=1,N2M)
       WRITE(NAV,105) PMIAVG
-!      IF (IPS.EQ.1) THEN
-!      WRITE(NAV)(( PSAVGZ(I,J)    ,I=1,N1M),J=1,N2M)
-!      WRITE(NAV)(( PSRMSZ(I,J)    ,I=1,N1M),J=1,N2M)
-!      WRITE(NAV)(((PSUIAVGZ(I,J,L),I=1,N1M),J=1,N2M),L=1,3)
-!      WRITE(NAV)(( TALPHAVGZ(I,J) ,I=1,N1M),J=1,N2M)
-!      ENDIF
+      IF (IPS.EQ.1) THEN
+      WRITE(NAV)(( PSAVGZ(I,J)    ,I=1,N1M),J=1,N2M)
+      WRITE(NAV)(( PSRMSZ(I,J)    ,I=1,N1M),J=1,N2M)
+      WRITE(NAV)(((PSUIAVGZ(I,J,L),I=1,N1M),J=1,N2M),L=1,3)
+      WRITE(NAV)(( TALPHAVGZ(I,J) ,I=1,N1M),J=1,N2M)
+      ENDIF
 
       !PSI=0 FLUID PROPERTIES
       WRITE(NAV,104)(( URAVGZ0(I,J)     ,I=1,N1M),J=1,N2M)
@@ -9140,12 +9304,12 @@ C     FROM STAGGERED GRID STRUCTURE TO DETERMINE CELL CENTER VALUES
       UIUJAVGZ=0.
       PAVGZ=0.
       P2AVGZ=0.
-      TNUAVGZ=0.
+      ! TNUAVGZ=0.
       SIJAVGZ=0.
       VORAVGZ=0.
       SSAVGZ=0.
       VOLFZ=0.
-      SGSDISSZ=0.
+      ! SGSDISSZ=0.
       PMIAVG=0.
 
       URAVGZ0=0.
@@ -9205,11 +9369,14 @@ C     SUBROUTINE FOR FIELD AVERAGING
       USE FLD_AVG
 
       USE HEAT_VAR
-
+      
+      IMPLICIT NONE
+      INTEGER*4 IHIST
+      
       ALLOCATE (UAVGZ(M1M,M2M),VAVGZ(M1M,M2M))
       ALLOCATE (WAVGZ(M1M,M2M),UIUJAVGZ(M1M,M2M,6),
      &          PAVGZ(M1M,M2M),P2AVGZ(M1M,M2M),
-     &          TNUAVGZ(M1M,M2M),VOLFZ(M1M,M2M))
+     &          VOLFZ(M1M,M2M))!TNUAVGZ(M1M,M2M),
 !     &         SIJAVGZ(M1M,M2M,6),VORAVGZ(M1M,M2M,3),
 !     &         SSAVGZ(M1M,M2M),SGSDISSZ(M1M,M2M),
       ALLOCATE (UAVGZ0(M1M,M2M),VAVGZ0(M1M,M2M))
@@ -9220,8 +9387,8 @@ C     SUBROUTINE FOR FIELD AVERAGING
       ALLOCATE (WAVGZ1(M1M,M2M),UIUJAVGZ1(M1M,M2M,6),
      &          PAVGZ1(M1M,M2M),P2AVGZ1(M1M,M2M),
      &          TIME1(M1M,M2M))
-!      ALLOCATE( PSAVGZ(M1M,M2M),PSRMSZ(M1M,M2M),
-!     &          PSUIAVGZ(M1M,M2M,3),TALPHAVGZ(M1M,M2M))
+      ALLOCATE( PSAVGZ(M1M,M2M),PSRMSZ(M1M,M2M),
+     &          PSUIAVGZ(M1M,M2M,3),TALPHAVGZ(M1M,M2M))
 
       UAVGZ=0.
       VAVGZ=0.
@@ -9230,12 +9397,12 @@ C     SUBROUTINE FOR FIELD AVERAGING
       PAVGZ=0.
       P2AVGZ=0.
       PMIAVG=0.
-      TNUAVGZ=0.
-      SIJAVGZ=0.
-      VORAVGZ=0.
+      ! TNUAVGZ=0.
+      ! SIJAVGZ=0.
+      ! VORAVGZ=0.
       VOLFZ=0.
-      SSAVGZ=0.
-      SGSDISSZ=0.
+      ! SSAVGZ=0.
+      ! SGSDISSZ=0.
 
       UAVGZ0=0.
       VAVGZ0=0.
@@ -9279,20 +9446,24 @@ C     FROM STAGGERED GRID STRUCTURE TO DETERMINE CELL CENTER VALUES
 
       USE FLD_AVG
       
-      USE LES_VAR
+      ! USE LES_VAR
+      IMPLICIT NONE
+      
+      REAL*8 U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
+      REAL*8 P(0:M1,0:M2,0:M3)
 
-      REAL U(0:M1,0:M2,0:M3),V(0:M1,0:M2,0:M3),W(0:M1,0:M2,0:M3)
-      REAL P(0:M1,0:M2,0:M3)
-
-      REAL PSI_CN(0:M1,0:M2,0:M3)
+      REAL*8 PSI_CN(0:M1,0:M2,0:M3)
 
       CHARACTER*16 tname
       CHARACTER*3  tfn1
       CHARACTER*1  tfnh
       CHARACTER*6  tfn2,tfn3
-      REAL SR(6)
-      real, dimension (:,:), allocatable :: TMP
-
+      REAL*8 SR(6)
+      REAL*8, dimension (:,:), allocatable :: TMP
+      
+      INTEGER*4 I,J,K,L,IHIST,IDG1,IDG2,IDG3,IDG4,IDG5,IDG6,NAV
+      REAL*8 UCC,VCC,WCC
+      
       tfnh='-'
 
 !$OMP PARALLEL DO private(I,J,UCC,VCC,WCC)
@@ -9352,23 +9523,23 @@ C     FROM STAGGERED GRID STRUCTURE TO DETERMINE CELL CENTER VALUES
       ENDDO
          PMIAVG         =PMIAVG         +PMI_DUDY         *DT
 
-!      IF (IPS.EQ.1) THEN
-!      DO K=1,N3M
-!      DO J=1,N2M
-!      DO I=1,N1M
-!      UCC=0.5*(U(I,J,K)+U(IPV(I),J,K))
-!      VCC=0.5*(V(I,J,K)+V(I,JPV(J),K))
-!      WCC=0.5*(W(I,J,K)+W(I,J,KPV(K)))
-!      PSAVGZ(I,J)    =PSAVGZ(I,J)    +T(I,J,K)    *DT
-!      PSRMSZ(I,J)    =PSRMSZ(I,J)    +T(I,J,K)**2 *DT
-!      PSUIAVGZ(I,J,1)=PSUIAVGZ(I,J,1)+T(I,J,K)*UCC*DT
-!      PSUIAVGZ(I,J,2)=PSUIAVGZ(I,J,2)+T(I,J,K)*VCC*DT
-!      PSUIAVGZ(I,J,3)=PSUIAVGZ(I,J,3)+T(I,J,K)*WCC*DT
-!      TALPHAVGZ(I,J) =TALPHAVGZ(I,J) +TALPH(I,J,K)*DT
-!      ENDDO
-!      ENDDO
-!      ENDDO
-!      ENDIF
+      IF (IPS.EQ.1) THEN
+      DO K=1,N3M
+      DO J=1,N2M
+      DO I=1,N1M
+      UCC=0.5*(U(I,J,K)+U(IPV(I),J,K))
+      VCC=0.5*(V(I,J,K)+V(I,JPV(J),K))
+      WCC=0.5*(W(I,J,K)+W(I,J,KPV(K)))
+      PSAVGZ(I,J)    =PSAVGZ(I,J)    +T(I,J,K)    *DT
+      PSRMSZ(I,J)    =PSRMSZ(I,J)    +T(I,J,K)**2 *DT
+      PSUIAVGZ(I,J,1)=PSUIAVGZ(I,J,1)+T(I,J,K)*UCC*DT
+      PSUIAVGZ(I,J,2)=PSUIAVGZ(I,J,2)+T(I,J,K)*VCC*DT
+      PSUIAVGZ(I,J,3)=PSUIAVGZ(I,J,3)+T(I,J,K)*WCC*DT
+      TALPHAVGZ(I,J) =TALPHAVGZ(I,J) +TALPH(I,J,K)*DT
+      ENDDO
+      ENDDO
+      ENDDO
+      ENDIF
 
       IF (MOD(NTIME,NPRIAVG).EQ.0) THEN
 
@@ -9406,12 +9577,12 @@ C     FROM STAGGERED GRID STRUCTURE TO DETERMINE CELL CENTER VALUES
       WRITE(NAV,104)(( P2AVGZ(I,J)    ,I=1,N1M),J=1,N2M)
       WRITE(NAV,104)(( VOLFZ(I,J)     ,I=1,N1M),J=1,N2M)
       WRITE(NAV,105) PMIAVG    
-!      IF (IPS.EQ.1) THEN
-!      WRITE(NAV)(( PSAVGZ(I,J)    ,I=1,N1M),J=1,N2M)
-!      WRITE(NAV)(( PSRMSZ(I,J)    ,I=1,N1M),J=1,N2M)
-!      WRITE(NAV)(((PSUIAVGZ(I,J,L),I=1,N1M),J=1,N2M),L=1,3)
-!      WRITE(NAV)(( TALPHAVGZ(I,J) ,I=1,N1M),J=1,N2M)
-!      ENDIF
+      IF (IPS.EQ.1) THEN
+      WRITE(NAV,104)(( PSAVGZ(I,J)    ,I=1,N1M),J=1,N2M)
+      WRITE(NAV,104)(( PSRMSZ(I,J)    ,I=1,N1M),J=1,N2M)
+      WRITE(NAV,104)(((PSUIAVGZ(I,J,L),I=1,N1M),J=1,N2M),L=1,3)
+      WRITE(NAV,104)(( TALPHAVGZ(I,J) ,I=1,N1M),J=1,N2M)
+      ENDIF
 
       !PSI=0 FLUID PROPERTIES
       WRITE(NAV,104)(( UAVGZ0(I,J)     ,I=1,N1M),J=1,N2M)
@@ -9440,12 +9611,12 @@ C     FROM STAGGERED GRID STRUCTURE TO DETERMINE CELL CENTER VALUES
       PAVGZ=0.
       P2AVGZ=0.
       PMIAVG=0.
-      TNUAVGZ=0.
-      SIJAVGZ=0.
-      VORAVGZ=0.
+      ! TNUAVGZ=0.
+      ! SIJAVGZ=0.
+      ! VORAVGZ=0.
       VOLFZ=0.
-      SSAVGZ=0.
-      SGSDISSZ=0.
+      ! SSAVGZ=0.
+      ! SGSDISSZ=0.
 
       UAVGZ0=0.
       VAVGZ0=0.
@@ -9520,8 +9691,8 @@ C     FROM STAGGERED GRID STRUCTURE TO DETERMINE CELL CENTER VALUES
       subroutine real_time(seconds)
 
       implicit none
-      integer clock_count,clock_max,clock_rate
-      real seconds
+      integer*8 clock_count,clock_max,clock_rate
+      real*8 seconds
 
       call system_clock ( clock_count, clock_rate, clock_max )
 
@@ -9555,18 +9726,18 @@ C     FROM STAGGERED GRID STRUCTURE TO DETERMINE CELL CENTER VALUES
         implicit none
 
         character ( len = 8 ) ampm
-        integer d
-        integer h
-        integer m
-        integer mm
+        integer*8 d
+        integer*8 h
+        integer*8 m
+        integer*8 mm
         character ( len = 9 ), parameter, dimension(12) :: month = (/
      &    'January  ', 'February ', 'March    ', 'April    ',
      &    'May      ', 'June     ', 'July     ', 'August   ',
      &    'September', 'October  ', 'November ', 'December ' /)
-        integer n
-        integer s
-        integer values(8)
-        integer y
+        integer*8 n
+        integer*8 s
+        integer*8 values(8)
+        integer*8 y
 
         call date_and_time ( values = values )
 
